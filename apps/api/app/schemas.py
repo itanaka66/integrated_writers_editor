@@ -45,9 +45,10 @@ class ImportJobOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 
 class ConnectionTestRequest(BaseModel):
-    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama'
+    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama' | 'anthropic' | 'openai' | 'google'
     url:str|None=None # ignored for 'database'; tests whatever value the form currently holds, saved or not
-    model:str|None=None # 'ollama' / 'controller_ollama' only — checks the model is pulled, not just reachable
+    model:str|None=None # checks the model is available, not just reachable (all targets except 'database'/'qdrant')
+    api_key:str|None=None # 'anthropic' / 'openai' / 'google' only
 
 class ConnectionTestResult(BaseModel):
     ok:bool; message:str; latency_ms:int
@@ -73,6 +74,10 @@ class SystemSettingsOut(BaseModel):
     ollama_embed_model:str; ollama_embed_model_is_override:bool
     controller_ollama_url:str; controller_ollama_url_is_override:bool
     controller_ollama_model:str; controller_ollama_model_is_override:bool
+    ai_provider:str
+    anthropic_api_key_is_set:bool; anthropic_model:str
+    openai_api_key_is_set:bool; openai_model:str
+    google_api_key_is_set:bool; google_model:str
     updated_at:object|None=None
 
 class TextSearchMatch(BaseModel):
@@ -100,3 +105,10 @@ class SystemSettingsUpdate(BaseModel):
     ollama_embed_model:str|None=None
     controller_ollama_url:str|None=None
     controller_ollama_model:str|None=None
+    ai_provider:str|None=None
+    anthropic_api_key:str|None=None
+    anthropic_model:str|None=None
+    openai_api_key:str|None=None
+    openai_model:str|None=None
+    google_api_key:str|None=None
+    google_model:str|None=None

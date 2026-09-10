@@ -46,6 +46,40 @@ def test_unset_fields_are_left_untouched(client):
     assert body["ollama_model"] == "custom-model"
 
 
+def test_ai_provider_defaults_to_ollama(client):
+    r = client.get("/api/v1/system-settings")
+    body = r.json()
+    assert body["ai_provider"] == "ollama"
+    assert body["anthropic_api_key_is_set"] is False
+    assert body["openai_api_key_is_set"] is False
+    assert body["google_api_key_is_set"] is False
+
+
+def test_setting_an_api_key_never_echoes_the_value_back(client):
+    r = client.put("/api/v1/system-settings", json={"ai_provider": "anthropic", "anthropic_api_key": "sk-ant-secret", "anthropic_model": "claude-sonnet-4-5"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ai_provider"] == "anthropic"
+    assert body["anthropic_model"] == "claude-sonnet-4-5"
+    assert body["anthropic_api_key_is_set"] is True
+    assert "anthropic_api_key" not in body
+    assert "sk-ant-secret" not in r.text
+
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["anthropic_api_key_is_set"] is True
+    assert "sk-ant-secret" not in r.text
+
+
+def test_clearing_an_api_key_with_empty_string(client):
+    client.put("/api/v1/system-settings", json={"openai_api_key": "sk-secret"})
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["openai_api_key_is_set"] is True
+
+    client.put("/api/v1/system-settings", json={"openai_api_key": ""})
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["openai_api_key_is_set"] is False
+
+
 def test_mask_database_url():
     assert rc.mask_database_url("postgresql+psycopg2://writers:writers@db:5432/writers") == "writers:***@db:5432/writers"
     assert rc.mask_database_url("sqlite:///./dev.db") == "sqlite:///./dev.db"
