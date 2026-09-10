@@ -3,6 +3,14 @@ class Settings(BaseSettings):
  database_url:str='postgresql+psycopg2://writers:writers@localhost:5432/writers'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
  admin_username:str='admin'; admin_password:str='writers-studio-change-me'
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
+ # Which AI backend /ai/generate, chat, and material summarization use.
+ # 'ollama' (default) keeps everything local; the others call out to the
+ # respective vendor's REST API using the API key below. Embeddings (RAG
+ # indexing/search) always go through Ollama regardless of this setting.
+ ai_provider:str='ollama'
+ anthropic_api_key:str=''; anthropic_model:str='claude-sonnet-4-5'
+ openai_api_key:str=''; openai_model:str='gpt-4o-mini'
+ google_api_key:str=''; google_model:str='gemini-2.0-flash'
  # Local-disk mirror of episode text, optionally auto-committed/pushed to a
  # git remote on a timer. git_remote_url takes a token embedded the way git
  # expects (https://<token>@host/owner/repo.git) or a plain URL if the

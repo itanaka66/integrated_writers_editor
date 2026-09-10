@@ -25,6 +25,13 @@ class EffectiveConfig:
     ollama_embed_model: str
     controller_ollama_url: str
     controller_ollama_model: str
+    ai_provider: str = 'ollama'
+    anthropic_api_key: str = ''
+    anthropic_model: str = ''
+    openai_api_key: str = ''
+    openai_model: str = ''
+    google_api_key: str = ''
+    google_model: str = ''
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -56,6 +63,13 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
         controller_ollama_url=_pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url),
         controller_ollama_model=_pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model),
+        ai_provider=_pick(row.ai_provider if row else None, env_settings.ai_provider),
+        anthropic_api_key=_pick(row.anthropic_api_key if row else None, env_settings.anthropic_api_key),
+        anthropic_model=_pick(row.anthropic_model if row else None, env_settings.anthropic_model),
+        openai_api_key=_pick(row.openai_api_key if row else None, env_settings.openai_api_key),
+        openai_model=_pick(row.openai_model if row else None, env_settings.openai_model),
+        google_api_key=_pick(row.google_api_key if row else None, env_settings.google_api_key),
+        google_model=_pick(row.google_model if row else None, env_settings.google_model),
     )
 
 

@@ -9,7 +9,7 @@ from .db import get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
-from .ollama import generate
+from .providers import generate, ProviderError
 from .rag import index,search,search_all_projects
 from .context import build
 from .auth import BasicAuthMiddleware
@@ -117,6 +117,10 @@ def _system_settings_out(db):
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
   controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
+  ai_provider=cfg.ai_provider,
+  anthropic_api_key_is_set=bool(cfg.anthropic_api_key),anthropic_model=cfg.anthropic_model,
+  openai_api_key_is_set=bool(cfg.openai_api_key),openai_model=cfg.openai_model,
+  google_api_key_is_set=bool(cfg.google_api_key),google_model=cfg.google_model,
   updated_at=row.updated_at if row else None,
  )
 @app.get('/api/v1/system-settings',response_model=SystemSettingsOut)
@@ -149,6 +153,12 @@ def system_settings_test_connection(x:ConnectionTestRequest):
  elif x.target in ('ollama','controller_ollama'):
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_ollama(x.url,x.model)
+ elif x.target=='anthropic':
+  ok,msg,ms=connection_test.test_anthropic(x.api_key or '',x.model)
+ elif x.target=='openai':
+  ok,msg,ms=connection_test.test_openai(x.api_key or '',x.model)
+ elif x.target=='google':
+  ok,msg,ms=connection_test.test_google(x.api_key or '',x.model)
  else:
   raise HTTPException(400,f'unknown target: {x.target}')
  return ConnectionTestResult(ok=ok,message=msg,latency_ms=ms)
@@ -313,7 +323,8 @@ async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  task={'continue':'本文の続きを書く','summary':'本文を要約する','proofread':'表現・誤字脱字を校正する'}.get(x.mode,'依頼を実行する')
  prompt=f'''あなたは記事編集AIです。既存の記事内容を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
  try:t,m=await generate(prompt)
- except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ except ProviderError as ex:raise HTTPException(400,str(ex))
+ except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return {'text':t,'model':m,'context':{'rag':len(c['rag'])}}
 
 @app.get('/api/v1/projects/{pid}/chat',response_model=list[ChatMessageOut])
@@ -370,7 +381,8 @@ async def summarize_material(file:UploadFile|None=File(None),text:str|None=Form(
  if not content.strip():raise HTTPException(400,'file または text のいずれかを指定してください。')
  prompt=materials.build_summarize_prompt(content)
  try:t,m=await generate(prompt)
- except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ except ProviderError as ex:raise HTTPException(400,str(ex))
+ except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return MaterialSummarizeOut(summary=t,model=m)
 
 @app.get('/api/v1/projects/{pid}/templates',response_model=list[TemplateOut])

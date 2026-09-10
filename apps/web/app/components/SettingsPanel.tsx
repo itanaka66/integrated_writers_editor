@@ -24,7 +24,18 @@ type SystemSettings = {
   ollama_embed_model: string; ollama_embed_model_is_override: boolean;
   controller_ollama_url: string; controller_ollama_url_is_override: boolean;
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
+  ai_provider: string;
+  anthropic_api_key_is_set: boolean; anthropic_model: string;
+  openai_api_key_is_set: boolean; openai_model: string;
+  google_api_key_is_set: boolean; google_model: string;
 };
+
+const AI_PROVIDERS = [
+  { value: "ollama", label: "ローカルLLM（Ollama）" },
+  { value: "anthropic", label: "Claude（Anthropic）" },
+  { value: "openai", label: "ChatGPT（OpenAI）" },
+  { value: "google", label: "Gemini（Google）" },
+];
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
   const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export">("basic");
@@ -41,6 +52,10 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
     controller_ollama_url: "", controller_ollama_model: "",
+    ai_provider: "ollama",
+    anthropic_api_key: "", anthropic_model: "",
+    openai_api_key: "", openai_model: "",
+    google_api_key: "", google_model: "",
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -63,22 +78,22 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     } finally { setBackupBusy(false); }
   }
 
-  async function testConnection(resultKey: string, target: string, url?: string, model?: string) {
+  async function testConnection(resultKey: string, target: string, url?: string, model?: string, apiKey?: string) {
     setTestResults((prev) => ({ ...prev, [resultKey]: "testing" }));
     try {
-      const r: TestResult = await post("/system-settings/test-connection", { target, url, model });
+      const r: TestResult = await post("/system-settings/test-connection", { target, url, model, api_key: apiKey });
       setTestResults((prev) => ({ ...prev, [resultKey]: r }));
     } catch {
       setTestResults((prev) => ({ ...prev, [resultKey]: { ok: false, message: "テストに失敗しました（通信エラー）。", latency_ms: 0 } }));
     }
   }
 
-  function TestButton({ target, resultKey, url, model }: { target: string; resultKey?: string; url?: string; model?: string }) {
+  function TestButton({ target, resultKey, url, model, apiKey }: { target: string; resultKey?: string; url?: string; model?: string; apiKey?: string }) {
     const key = resultKey ?? target;
     const result = testResults[key];
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <button type="button" onClick={() => testConnection(key, target, url, model)} disabled={result === "testing"}>
+        <button type="button" onClick={() => testConnection(key, target, url, model, apiKey)} disabled={result === "testing"}>
           {result === "testing" ? "テスト中..." : "接続テスト"}
         </button>
         {result && result !== "testing" && (
@@ -98,6 +113,10 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
+        ai_provider: s.ai_provider,
+        anthropic_api_key: "", anthropic_model: s.anthropic_model,
+        openai_api_key: "", openai_model: s.openai_model,
+        google_api_key: "", google_model: s.google_model,
       });
     });
   }, [tab]);
@@ -107,16 +126,35 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     loadBackupStatus();
   }, [tab]);
 
+  function applySettingsResponse(s: SystemSettings) {
+    setSys(s);
+    setSysForm({
+      qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
+      ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
+      controller_ollama_model: s.controller_ollama_model,
+      ai_provider: s.ai_provider,
+      // API keys never come back from the server (see SystemSettingsOut) —
+      // always reset these to blank so re-saving unrelated fields can't
+      // accidentally wipe a previously-stored key (see saveConnection).
+      anthropic_api_key: "", anthropic_model: s.anthropic_model,
+      openai_api_key: "", openai_model: s.openai_model,
+      google_api_key: "", google_model: s.google_model,
+    });
+  }
+
   async function saveConnection() {
     setSysBusy(true); setSysSaved(false);
     try {
-      const s: SystemSettings = await put("/system-settings", sysForm);
-      setSys(s);
-      setSysForm({
-        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
-      });
+      // Blank api_key fields mean "leave unchanged" here, not "clear" — only
+      // send them when the user actually typed a new key. Clearing a key is
+      // a separate explicit action (the "クリア" button -> resetField).
+      const { anthropic_api_key, openai_api_key, google_api_key, ...rest } = sysForm;
+      const payload: Record<string, string> = { ...rest };
+      if (anthropic_api_key) payload.anthropic_api_key = anthropic_api_key;
+      if (openai_api_key) payload.openai_api_key = openai_api_key;
+      if (google_api_key) payload.google_api_key = google_api_key;
+      const s: SystemSettings = await put("/system-settings", payload);
+      applySettingsResponse(s);
       setSysSaved(true);
     } finally { setSysBusy(false); }
   }
@@ -125,12 +163,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     setSysBusy(true); setSysSaved(false);
     try {
       const s: SystemSettings = await put("/system-settings", { [field]: "" });
-      setSys(s);
-      setSysForm({
-        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
-      });
+      applySettingsResponse(s);
       setSysSaved(true);
     } finally { setSysBusy(false); }
   }
@@ -272,6 +305,58 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 <input value={sysForm.controller_ollama_model} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_model: e.target.value })} />
               </label>
               {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label style={{ gridColumn: "1/-1" }}>
+                使用するAIプロバイダー（記事生成・チャット・資料要約に使用）
+                <select value={sysForm.ai_provider} onChange={(e) => setSysForm({ ...sysForm, ai_provider: e.target.value })}>
+                  {AI_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </label>
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
+                「ローカルLLM（Ollama）」を選ぶと、上のOllama 1（Writer）の設定が使われます。APIキーは保存後は値を表示しません（安全のため）。接続テストは、まだ保存していない場合は今入力した値でテストされます。
+              </p>
+
+              <label>
+                Claude（Anthropic）APIキー {sys.anthropic_api_key_is_set && <span className="savedNote">（設定済み）</span>}
+                <input type="password" value={sysForm.anthropic_api_key} onChange={(e) => setSysForm({ ...sysForm, anthropic_api_key: e.target.value })} placeholder={sys.anthropic_api_key_is_set ? "変更する場合のみ入力" : "sk-ant-..."} />
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="anthropic" model={sysForm.anthropic_model} apiKey={sysForm.anthropic_api_key} />
+                {sys.anthropic_api_key_is_set && <button type="button" onClick={() => resetField("anthropic_api_key")} disabled={sysBusy}>クリア</button>}
+              </div>
+              <label>
+                Claude モデル名
+                <input value={sysForm.anthropic_model} onChange={(e) => setSysForm({ ...sysForm, anthropic_model: e.target.value })} placeholder="claude-sonnet-4-5" />
+              </label>
+              <div />
+
+              <label>
+                ChatGPT（OpenAI）APIキー {sys.openai_api_key_is_set && <span className="savedNote">（設定済み）</span>}
+                <input type="password" value={sysForm.openai_api_key} onChange={(e) => setSysForm({ ...sysForm, openai_api_key: e.target.value })} placeholder={sys.openai_api_key_is_set ? "変更する場合のみ入力" : "sk-..."} />
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="openai" model={sysForm.openai_model} apiKey={sysForm.openai_api_key} />
+                {sys.openai_api_key_is_set && <button type="button" onClick={() => resetField("openai_api_key")} disabled={sysBusy}>クリア</button>}
+              </div>
+              <label>
+                ChatGPT モデル名
+                <input value={sysForm.openai_model} onChange={(e) => setSysForm({ ...sysForm, openai_model: e.target.value })} placeholder="gpt-4o-mini" />
+              </label>
+              <div />
+
+              <label>
+                Gemini（Google）APIキー {sys.google_api_key_is_set && <span className="savedNote">（設定済み）</span>}
+                <input type="password" value={sysForm.google_api_key} onChange={(e) => setSysForm({ ...sysForm, google_api_key: e.target.value })} placeholder={sys.google_api_key_is_set ? "変更する場合のみ入力" : "AIza..."} />
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="google" model={sysForm.google_model} apiKey={sysForm.google_api_key} />
+                {sys.google_api_key_is_set && <button type="button" onClick={() => resetField("google_api_key")} disabled={sysBusy}>クリア</button>}
+              </div>
+              <label>
+                Gemini モデル名
+                <input value={sysForm.google_model} onChange={(e) => setSysForm({ ...sysForm, google_model: e.target.value })} placeholder="gemini-2.0-flash" />
+              </label>
+              <div />
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
                 各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはステートレスなクライアントのため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
