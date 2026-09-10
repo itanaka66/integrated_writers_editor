@@ -1,5 +1,5 @@
-// Desktop notifications for long-running background jobs (auto-write,
-// file import) finishing while the user's attention is elsewhere. Browser
+// Desktop notifications for long-running background jobs (file import)
+// finishing while the user's attention is elsewhere. Browser
 // Notification API only — no server push, no service worker — so this
 // only fires while the tab that started/is watching the job is open.
 

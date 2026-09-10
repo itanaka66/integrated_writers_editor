@@ -1,23 +1,13 @@
 "use client";
 import { Project } from "../lib/types";
 
-export type Section =
-  | "home" | "write" | "plot" | "characters" | "world" | "timeline"
-  | "glossary" | "foreshadow" | "analytics" | "search" | "chat" | "autowrite" | "settings";
+export type Section = "home" | "write" | "search" | "chat" | "settings";
 
 const NAV: { key: Section; label: string }[] = [
-  { key: "home", label: "🏠 作品ホーム" },
+  { key: "home", label: "🏠 プロジェクトホーム" },
   { key: "write", label: "✎ 執筆" },
-  { key: "plot", label: "◆ プロット" },
-  { key: "characters", label: "♟ キャラクター" },
-  { key: "world", label: "◈ 世界観" },
-  { key: "timeline", label: "⏱ 年表" },
-  { key: "glossary", label: "📖 用語集" },
-  { key: "foreshadow", label: "◎ 伏線" },
-  { key: "analytics", label: "📊 分析" },
   { key: "search", label: "🔍 検索" },
   { key: "chat", label: "💬 AIチャット" },
-  { key: "autowrite", label: "🚀 自動執筆" },
   { key: "settings", label: "⚙ 設定" },
 ];
 

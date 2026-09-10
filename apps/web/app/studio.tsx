@@ -7,11 +7,8 @@ import Sidebar, { Section } from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import ProjectHome from "./components/ProjectHome";
 import WritePanel from "./components/WritePanel";
-import { CharacterPanel, WorldPanel, GlossaryPanel, PlotPanel, ForeshadowPanel, TimelinePanel } from "./components/EntityPanels";
-import AnalyticsPanel from "./components/AnalyticsPanel";
 import SearchPanel from "./components/SearchPanel";
 import ChatPanel from "./components/ChatPanel";
-import AutoWritePanel from "./components/AutoWritePanel";
 import SettingsPanel from "./components/SettingsPanel";
 
 export default function Studio() {
@@ -40,16 +37,8 @@ function Workspace() {
       <main className="appMain">
         {section === "home" && <ProjectHome project={project} onSection={setSection} />}
         {section === "write" && <WritePanel project={project} />}
-        {section === "plot" && <PlotPanel projectId={project.id} />}
-        {section === "characters" && <CharacterPanel projectId={project.id} />}
-        {section === "world" && <WorldPanel projectId={project.id} />}
-        {section === "timeline" && <TimelinePanel projectId={project.id} />}
-        {section === "glossary" && <GlossaryPanel projectId={project.id} />}
-        {section === "foreshadow" && <ForeshadowPanel projectId={project.id} />}
-        {section === "analytics" && <AnalyticsPanel projectId={project.id} />}
         {section === "search" && <SearchPanel projectId={project.id} />}
         {section === "chat" && <ChatPanel projectId={project.id} />}
-        {section === "autowrite" && <AutoWritePanel projectId={project.id} />}
         {section === "settings" && <SettingsPanel project={project} onSaved={setProject} />}
       </main>
     </div>

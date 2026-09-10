@@ -41,7 +41,7 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
           if (timer.current) clearInterval(timer.current);
           notify(
             latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
-            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}話・更新${latest.updated_episodes}話）` : `: ${latest.last_message}`}`,
+            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}件・更新${latest.updated_episodes}件）` : `: ${latest.last_message}`}`,
           );
         }
       }, 2000);
@@ -60,7 +60,7 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
         <h1>ファイルからインポート</h1>
         {!job && (
           <>
-            <p>なろう形式のテキストファイル（メタ情報＋エピソード区切り付きの本編、または下書きエピソードのみのファイル）から、新しい作品を作成します。</p>
+            <p>区切り付きのテキストファイル（メタ情報＋記事区切り付きの本文、または記事のみのファイル）から、新しいプロジェクトを作成します。</p>
             <label>
               ファイル *
               <input
@@ -71,7 +71,7 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
               />
             </label>
             <p className="searchSource">
-              取り込み後、各話のRAG索引付け・キャラクター状態の自動抽出・連続性監査を自動実行します（話数が多いと数分かかることがあります）。
+              取り込み後、各記事のRAG索引付けを自動実行します（記事数が多いと数分かかることがあります）。
             </p>
             <div className="modalActions">
               <button onClick={onCancel}>キャンセル</button>
@@ -85,14 +85,14 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
             <div className="progress"><i style={{ width: `${job.progress_percent}%` }} /></div>
             <p className="searchSource">
               {job.status === "queued" && "キューに追加しました…"}
-              {job.status === "running" && `${job.processed_episodes}/${job.total_episodes}話 処理中… ${job.last_message}`}
+              {job.status === "running" && `${job.processed_episodes}/${job.total_episodes}件 処理中… ${job.last_message}`}
               {job.status === "completed" && job.last_message}
               {job.status === "error" && `エラー: ${job.last_message}`}
             </p>
             <div className="modalActions">
               {job.status !== "completed" && job.status !== "error" && <button onClick={onCancel}>閉じる（バックグラウンドで続行）</button>}
               {job.status === "error" && <button onClick={onCancel}>閉じる</button>}
-              {job.status === "completed" && <button onClick={finish}>作品を開く</button>}
+              {job.status === "completed" && <button onClick={finish}>プロジェクトを開く</button>}
             </div>
           </>
         )}

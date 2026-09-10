@@ -16,10 +16,6 @@ def test_project_not_found(client):
 
 
 def test_episode_crud_and_save_warnings(client, project):
-    # A character must exist, otherwise update_character_states legitimately
-    # has nothing to do and returns early without touching Ollama.
-    client.post(f"/api/v1/projects/{project['id']}/characters", json={"name": "田中"})
-
     r = client.post(
         f"/api/v1/projects/{project['id']}/episodes",
         json={"number": 1, "title": "第一話", "summary": "s", "content": "本文"},
@@ -30,14 +26,13 @@ def test_episode_crud_and_save_warnings(client, project):
     r = client.get(f"/api/v1/projects/{project['id']}/episodes")
     assert len(r.json()) == 1
 
-    # PUT hits RAG indexing and character-state update, both of which fail in
-    # the test environment (no Ollama/Qdrant) — they must be reported as
-    # warnings, not swallowed or turned into a 500.
+    # PUT hits RAG indexing, which fails in the test environment (no Qdrant)
+    # — it must be reported as a warning, not swallowed or turned into a 500.
     r = client.put(f"/api/v1/episodes/{ep['id']}", json={"title": "改題"})
     assert r.status_code == 200
     body = r.json()
     assert body["title"] == "改題"
-    assert len(body["warnings"]) == 2
+    assert len(body["warnings"]) == 1
 
     r = client.delete(f"/api/v1/episodes/{ep['id']}")
     assert r.status_code == 204

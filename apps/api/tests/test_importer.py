@@ -39,21 +39,13 @@ DRAFT_EPISODES = """\
 
 
 def _stub_ai(monkeypatch):
-    # importer.run_import_job calls out to RAG indexing and two AI analysis
-    # steps for every episode; none of them should need a real Ollama/Qdrant
-    # up just to prove the import's DB bookkeeping is correct.
+    # importer.run_import_job calls out to RAG indexing for every episode;
+    # it shouldn't need a real Qdrant up just to prove the import's DB
+    # bookkeeping is correct.
     async def fake_index(chunks):
         return None
 
-    async def fake_update_character_states(db, project_id, episode):
-        return []
-
-    async def fake_check_continuity(db, project_id, episode_id=None):
-        return []
-
     monkeypatch.setattr(importer, "index", fake_index)
-    monkeypatch.setattr(importer, "update_character_states", fake_update_character_states)
-    monkeypatch.setattr(importer, "check_continuity", fake_check_continuity)
 
 
 def test_writers_import_creates_project_and_episodes(db_session_factory, monkeypatch):

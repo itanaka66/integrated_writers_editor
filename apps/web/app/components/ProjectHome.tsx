@@ -6,13 +6,8 @@ import { Section } from "./Sidebar";
 
 const ICONS: { key: Section; label: string }[] = [
   { key: "write", label: "✎ 執筆" },
-  { key: "plot", label: "◆ プロット" },
-  { key: "characters", label: "♟ 人物" },
-  { key: "world", label: "◈ 世界観" },
-  { key: "timeline", label: "⏱ 年表" },
-  { key: "glossary", label: "📖 用語集" },
-  { key: "foreshadow", label: "◎ 伏線" },
-  { key: "analytics", label: "📊 分析" },
+  { key: "search", label: "🔍 検索" },
+  { key: "chat", label: "💬 AIチャット" },
   { key: "settings", label: "⚙ 設定" },
 ];
 
@@ -26,16 +21,16 @@ export default function ProjectHome({ project, onSection }: { project: Project; 
   return (
     <div className="panel projectHome">
       <div className="projectHomeHead">
-        <div><small>{project.genre || "未設定"}</small><h1>{project.name}</h1><p>{project.description || "あらすじ未設定"}</p></div>
-        <div className="projectHomeProgress"><span>進捗 {pct}%</span><b>({episodes.length}/{goal}話)</b></div>
+        <div><h1>{project.name}</h1><p>{project.description || "説明未設定"}</p></div>
+        <div className="projectHomeProgress"><span>進捗 {pct}%</span><b>({episodes.length}/{goal}記事)</b></div>
       </div>
       <div className="iconGrid">
         {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{x.label}</button>)}
       </div>
       <div className="card">
         <small>最近の更新</small>
-        {recent.length === 0 ? <p>まだエピソードがありません。「執筆」から書き始めましょう。</p> :
-          recent.map((e) => <div className="twinRow" key={e.id}><b>第{e.number}話 {e.title}</b><span>{(e.summary || "").slice(0, 40) || "概要未設定"}</span></div>)}
+        {recent.length === 0 ? <p>まだ記事がありません。「執筆」から書き始めましょう。</p> :
+          recent.map((e) => <div className="twinRow" key={e.id}><b>{e.title}</b><span>{(e.summary || "").slice(0, 40) || "概要未設定"}</span></div>)}
       </div>
     </div>
   );
