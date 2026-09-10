@@ -1,0 +1,19 @@
+title: Integrated writers Editor (INE) — User Manual
+description: Online documentation for Integrated writers Editor (INE)
+theme: jekyll-theme-cayman
+
+# GitHub Pages whitelists this plugin but still requires it to be listed
+# here to activate it. Without it, the relative links between these docs
+# (e.g. "installation.md") would 404 on the published site — GitHub.com's
+# own repo browser resolves them fine on its own, but a Jekyll-rendered
+# page has no idea "installation.md" became "installation.html" unless
+# this plugin rewrites the link at build time.
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+
+exclude:
+  - Gemfile
+  - Gemfile.lock

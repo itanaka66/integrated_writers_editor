@@ -1,0 +1,74 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-writers}
+      POSTGRES_USER: ${POSTGRES_USER:-writers}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-writers}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U writers -d writers"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://writers:writers@db:5432/writers
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      CONTROLLER_OLLAMA_URL: ${CONTROLLER_OLLAMA_URL:-http://host.docker.internal:11434}
+      CONTROLLER_OLLAMA_MODEL: ${CONTROLLER_OLLAMA_MODEL:-qwen3:14b}
+      CORS_ORIGINS: http://localhost:3000
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your .env before running}
+      writers_STORAGE_DIR: /writers_storage
+      GIT_REMOTE_URL: ${GIT_REMOTE_URL:-}
+      GIT_AUTOSYNC_INTERVAL_SECONDS: ${GIT_AUTOSYNC_INTERVAL_SECONDS:-300}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-7}
+    volumes:
+      - writers_storage:/writers_storage
+      - backups:/backups
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  ollama_data:
+  writers_storage:
+  backups:
