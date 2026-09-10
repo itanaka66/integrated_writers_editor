@@ -57,6 +57,7 @@ const TOOL_GROUPS: { title: string; tools: Tool[] }[] = [
         options: ["SNS投稿", "メルマガ", "プレスリリース"],
         buildPrompt: (choice) => `この記事を${choice}向けに書き直してください。文字数や文体はその媒体に適した形にしてください。`,
       },
+      { key: "catchphrase", label: "📣 キャッチコピー生成", buildPrompt: () => "この記事の内容をもとに、読者の興味を引くキャッチコピーを5案提案してください。短く印象的なものと、内容を具体的に伝えるものをバランスよく含めてください。" },
     ],
   },
 ];
