@@ -7,3 +7,4 @@ httpx==0.28.1
 qdrant-client==1.15.1
 alembic==1.19.1
 python-multipart==0.0.20
+pypdf==5.1.0

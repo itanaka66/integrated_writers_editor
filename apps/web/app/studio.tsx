@@ -7,6 +7,7 @@ import Sidebar, { Section } from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import ProjectHome from "./components/ProjectHome";
 import WritePanel from "./components/WritePanel";
+import MaterialsPanel from "./components/MaterialsPanel";
 import SearchPanel from "./components/SearchPanel";
 import ChatPanel from "./components/ChatPanel";
 import SettingsPanel from "./components/SettingsPanel";
@@ -37,6 +38,7 @@ function Workspace() {
       <main className="appMain">
         {section === "home" && <ProjectHome project={project} onSection={setSection} />}
         {section === "write" && <WritePanel project={project} />}
+        {section === "materials" && <MaterialsPanel projectId={project.id} />}
         {section === "search" && <SearchPanel projectId={project.id} />}
         {section === "chat" && <ChatPanel projectId={project.id} />}
         {section === "settings" && <SettingsPanel project={project} onSaved={setProject} />}

@@ -1,11 +1,12 @@
 "use client";
 import { Project } from "../lib/types";
 
-export type Section = "home" | "write" | "search" | "chat" | "settings";
+export type Section = "home" | "write" | "materials" | "search" | "chat" | "settings";
 
 const NAV: { key: Section; label: string }[] = [
   { key: "home", label: "🏠 プロジェクトホーム" },
   { key: "write", label: "✎ 執筆" },
+  { key: "materials", label: "🗂 資料" },
   { key: "search", label: "🔍 検索" },
   { key: "chat", label: "💬 AIチャット" },
   { key: "settings", label: "⚙ 設定" },

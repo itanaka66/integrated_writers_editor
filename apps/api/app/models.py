@@ -48,6 +48,33 @@ class ChatMessage(Base):
     content:Mapped[str]=mapped_column(Text,default='')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
 
+class Memo(Base):
+    __tablename__='memos'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
+    category:Mapped[str]=mapped_column(String(100),default='')
+    title:Mapped[str]=mapped_column(String(300),default='')
+    content:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class Source(Base):
+    __tablename__='sources'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    episode_id:Mapped[int]=mapped_column(ForeignKey('episodes.id',ondelete='CASCADE'),index=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
+    title:Mapped[str]=mapped_column(String(300),default='')
+    url:Mapped[str]=mapped_column(String(1000),default='')
+    note:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class Template(Base):
+    __tablename__='templates'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
+    name:Mapped[str]=mapped_column(String(300),default='')
+    structure:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
 class RuntimeConfig(Base):
     """A single-row table of live-editable connection settings.
 
