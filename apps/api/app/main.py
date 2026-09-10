@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File
+from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
+from . import materials
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='writers-studio-change-me':
@@ -336,4 +337,48 @@ async def chat_send(pid:int,x:ChatMessageCreate,db:Session=Depends(get_db)):
 def chat_clear(pid:int,db:Session=Depends(get_db)):
  for m in db.scalars(select(ChatMessage).where(ChatMessage.project_id==pid)).all():db.delete(m)
  db.commit()
+
+@app.get('/api/v1/projects/{pid}/memos',response_model=list[MemoOut])
+def memos(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Memo,pid,limit,offset)
+@app.post('/api/v1/projects/{pid}/memos',response_model=MemoOut)
+def memo_add(pid:int,x:MemoCreate,db:Session=Depends(get_db)):o=Memo(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/memos/{mid}',response_model=MemoOut)
+def memo_put(mid:int,x:MemoUpdate,db:Session=Depends(get_db)):return crud_update(db,Memo,mid,x,'Memo')
+@app.delete('/api/v1/memos/{mid}',status_code=204)
+def memo_delete(mid:int,db:Session=Depends(get_db)):crud_delete(db,Memo,mid,'Memo')
+
+@app.get('/api/v1/episodes/{eid}/sources',response_model=list[SourceOut])
+def sources(eid:int,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Episode,eid,'Episode')
+ return list(db.scalars(select(Source).where(Source.episode_id==eid).order_by(Source.id)).all())
+@app.post('/api/v1/episodes/{eid}/sources',response_model=SourceOut)
+def source_add(eid:int,x:SourceCreate,db:Session=Depends(get_db)):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ o=Source(episode_id=eid,project_id=e.project_id,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/sources/{sid}',response_model=SourceOut)
+def source_put(sid:int,x:SourceUpdate,db:Session=Depends(get_db)):return crud_update(db,Source,sid,x,'Source')
+@app.delete('/api/v1/sources/{sid}',status_code=204)
+def source_delete(sid:int,db:Session=Depends(get_db)):crud_delete(db,Source,sid,'Source')
+
+@app.post('/api/v1/tools/summarize-material',response_model=MaterialSummarizeOut)
+async def summarize_material(file:UploadFile|None=File(None),text:str|None=Form(None)):
+ if file is not None:
+  data=await file.read()
+  content=materials.extract_text_from_pdf(data)
+ else:
+  content=text or ''
+ if not content.strip():raise HTTPException(400,'file または text のいずれかを指定してください。')
+ prompt=materials.build_summarize_prompt(content)
+ try:t,m=await generate(prompt)
+ except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ return MaterialSummarizeOut(summary=t,model=m)
+
+@app.get('/api/v1/projects/{pid}/templates',response_model=list[TemplateOut])
+def templates(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Template,pid,limit,offset)
+@app.post('/api/v1/projects/{pid}/templates',response_model=TemplateOut)
+def template_add(pid:int,x:TemplateCreate,db:Session=Depends(get_db)):o=Template(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/templates/{tid}',response_model=TemplateOut)
+def template_put(tid:int,x:TemplateUpdate,db:Session=Depends(get_db)):return crud_update(db,Template,tid,x,'Template')
+@app.delete('/api/v1/templates/{tid}',status_code=204)
+def template_delete(tid:int,db:Session=Depends(get_db)):crud_delete(db,Template,tid,'Template')
 

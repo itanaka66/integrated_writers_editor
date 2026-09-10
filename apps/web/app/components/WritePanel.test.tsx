@@ -1,0 +1,77 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import WritePanel from "./WritePanel";
+import { api, post, put, del } from "../lib/api";
+import { Project } from "../lib/types";
+
+vi.mock("../lib/api", () => ({
+  api: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  del: vi.fn(),
+}));
+
+const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "" };
+const episode = { id: 10, project_id: 1, number: 1, title: "第一記事", summary: "", content: "本文", updated_at: "" };
+
+describe("WritePanel", () => {
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+    vi.mocked(post).mockReset();
+    vi.mocked(put).mockReset();
+    vi.mocked(del).mockReset();
+  });
+
+  it("opens the AI tool picker and runs a direct tool", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockResolvedValue({ text: "AI結果" });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("🛠 AIツール")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("🛠 AIツール"));
+    fireEvent.click(screen.getByText("✎ 文章を改善"));
+
+    await waitFor(() => expect(screen.getByText("AI結果")).toBeInTheDocument());
+    expect(post).toHaveBeenCalledWith("/ai/generate", expect.objectContaining({ mode: "custom", episode_id: episode.id }));
+  });
+
+  it("runs a choice-based tool with the selected option embedded in the prompt", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockResolvedValue({ text: "SNS向け原稿" });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("🛠 AIツール")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("🛠 AIツール"));
+    fireEvent.click(screen.getByText("🔁 複数媒体への変換"));
+    fireEvent.click(screen.getByText("SNS投稿"));
+
+    await waitFor(() => expect(screen.getByText("SNS向け原稿")).toBeInTheDocument());
+    const call = vi.mocked(post).mock.calls.find((c) => c[0] === "/ai/generate");
+    expect((call?.[1] as { instruction: string }).instruction).toContain("SNS投稿");
+  });
+
+  it("adds a source for the current article", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockResolvedValue({});
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText(/出典/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/📚 出典/));
+    fireEvent.change(screen.getByPlaceholderText("出典タイトル *"), { target: { value: "参考記事" } });
+    fireEvent.click(screen.getByText("＋ 出典を追加"));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/sources`, expect.objectContaining({ title: "参考記事" })));
+  });
+});

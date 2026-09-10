@@ -11,6 +11,20 @@ class RagIndex(BaseModel): project_id:int
 class RagSearch(BaseModel): project_id:int; query:str; limit:int=8
 class RagSearchAll(BaseModel): query:str; limit:int=8
 
+class MemoCreate(BaseModel): category:str=''; title:str=''; content:str=''
+class MemoOut(MemoCreate): id:int; project_id:int; created_at:object; model_config=ConfigDict(from_attributes=True)
+class MemoUpdate(BaseModel): category:str|None=None; title:str|None=None; content:str|None=None
+
+class SourceCreate(BaseModel): title:str=''; url:str=''; note:str=''
+class SourceOut(SourceCreate): id:int; episode_id:int; project_id:int; created_at:object; model_config=ConfigDict(from_attributes=True)
+class SourceUpdate(BaseModel): title:str|None=None; url:str|None=None; note:str|None=None
+
+class MaterialSummarizeOut(BaseModel): summary:str; model:str
+
+class TemplateCreate(BaseModel): name:str=''; structure:str=''
+class TemplateOut(TemplateCreate): id:int; project_id:int; created_at:object; model_config=ConfigDict(from_attributes=True)
+class TemplateUpdate(BaseModel): name:str|None=None; structure:str|None=None
+
 class EpisodeRevisionListOut(BaseModel):
     id:int; title:str; summary:str; created_at:object
     model_config=ConfigDict(from_attributes=True)

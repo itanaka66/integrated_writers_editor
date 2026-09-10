@@ -59,6 +59,13 @@ export async function postFile(p: string, file: File) {
   form.append("file", file);
   return api(p, { method: "POST", body: form });
 }
+export async function postForm(p: string, fields: Record<string, string | File | undefined>) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined) form.append(k, v);
+  }
+  return api(p, { method: "POST", body: form });
+}
 export async function del(p: string) {
   return api(p, { method: "DELETE" });
 }
