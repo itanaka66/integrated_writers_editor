@@ -5,12 +5,7 @@ import { api, post, put } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 
 const CUSTOM_ACTIONS = [
-  { label: "⏱ 時系列チェック", prompt: "時系列的に矛盾がないかチェックしてください。エピソード番号、世界内時間、出来事の前後関係、人物の移動・年齢・経過時間を確認し、矛盾があれば根拠となるエピソード番号と修正案を示してください。" },
-  { label: "♟ 人物状態チェック", prompt: "キャラクターの状態に矛盾がないかチェックしてください。生死、年齢、現在地、負傷・健康状態、感情、目標、知識、能力、人間関係の変化を過去の状態履歴と比較し、不整合と修正案を示してください。" },
-  { label: "🌐 世界観チェック", prompt: "世界観設定に矛盾がないかチェックしてください。場所、組織、アイテム、技術、魔法、文明レベル、設定ルールを過去の正本設定と比較し、矛盾の根拠と修正案を示してください。" },
-  { label: "◎ 伏線チェック", prompt: "伏線の状態をチェックしてください。設置済みの伏線、回収済みの伏線、未回収の伏線、予定より早すぎる・遅すぎる回収、設定と矛盾する回収を整理し、優先して確認すべき伏線を示してください。" },
-  { label: "◆ プロット整合", prompt: "現在のエピソードが全体プロットと整合しているかチェックしてください。目的、対立、進行状況、予定している展開、キャラクターの成長との矛盾を確認し、必要なら修正案を提示してください。" },
-  { label: "✎ 文章品質チェック", prompt: "このエピソードを長編小説の編集者としてチェックしてください。設定・時系列・人物描写の一貫性に加え、冗長表現、説明過多、視点の乱れ、会話の不自然さ、読者の没入を妨げる箇所を指摘し、具体的な改善案を示してください。" },
+  { label: "✎ 文章品質チェック", prompt: "この記事を編集者としてチェックしてください。論理構成、事実関係の一貫性に加え、冗長表現、説明過多、読みにくい箇所を指摘し、具体的な改善案を示してください。" },
 ];
 
 type Revision = { id: number; title: string; summary: string; created_at: string };
@@ -36,7 +31,7 @@ export default function WritePanel({ project }: { project: Project }) {
 
   async function addEpisode() {
     const number = (es[es.length - 1]?.number || 0) + 1;
-    const title = prompt("エピソードタイトル", `第${number}話`);
+    const title = prompt("記事タイトル", "");
     if (!title) return;
     await post(`/projects/${project.id}/episodes`, { number, title, summary: "", content: "" });
     await load();
@@ -100,23 +95,23 @@ export default function WritePanel({ project }: { project: Project }) {
     } finally { setBusy(false); }
   }
 
-  if (!e) return <div className="panel"><p>エピソードがまだありません。</p><button className="add" onClick={addEpisode}>＋ エピソードを追加</button></div>;
+  if (!e) return <div className="panel"><p>記事がまだありません。</p><button className="add" onClick={addEpisode}>＋ 記事を追加</button></div>;
 
   return (
     <div className="writeLayout">
       <aside className="writeEpisodeList">
-        <div className="section">EPISODES</div>
+        <div className="section">ARTICLES</div>
         <div className="episodes">
-          {es.map((x) => <button className={e.id === x.id ? "ep active" : "ep"} onClick={() => setE(x)} key={x.id}>#{String(x.number).padStart(3, "0")} {x.title}</button>)}
+          {es.map((x) => <button className={e.id === x.id ? "ep active" : "ep"} onClick={() => setE(x)} key={x.id}>{x.title}</button>)}
         </div>
-        <button className="newEpisode" onClick={addEpisode}>＋ 新規エピソード</button>
+        <button className="newEpisode" onClick={addEpisode}>＋ 新規記事</button>
       </aside>
       <section className="main">
         <div className="writeHead">
-          <div><small>EPISODE {e.number}</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
+          <div><small>ARTICLE</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
           <div className="writeHeadActions">
             <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
-            <button onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? "保存中" : "保存＋人物状態更新"}</button>
+            <button onClick={save}>{busy ? "保存中" : "保存"}</button>
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
@@ -139,12 +134,10 @@ export default function WritePanel({ project }: { project: Project }) {
         )}
       </section>
       <aside className="right">
-        <b>AI EDITOR-IN-CHIEF</b>
-        <p className="context">Context Builder：本文、人物、世界観、プロット、伏線、RAGを統合</p>
-        <button className="check" onClick={async () => { setBusy(true); const x = await post("/continuity/check", { project_id: project.id, episode_id: e.id }); setAi(JSON.stringify(x.issues || x.detail, null, 2)); setBusy(false); }}>⚠ 連続性を監査</button>
+        <b>AI EDITOR</b>
+        <p className="context">Context Builder：本文、RAGを統合</p>
         <div className="actions">
           <button onClick={() => aiRun("continue")}>▶ 続きを書く</button>
-          <button onClick={() => aiRun("plot")}>◆ 次の展開</button>
           <button onClick={() => aiRun("summary")}>要約</button>
           <button onClick={() => aiRun("proofread")}>校正</button>
         </div>

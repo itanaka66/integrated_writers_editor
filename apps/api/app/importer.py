@@ -1,12 +1,9 @@
-"""Background job that turns an uploaded なろう-format text file into
-Project/Episode rows, mirrors each episode to disk, indexes it for RAG,
-and runs the same AI analysis a normal save does (character-state
-extraction), finishing with one whole-project continuity audit.
+"""Background job that turns an uploaded bracket-format text file into
+Project/Episode rows, mirrors each episode to disk, and indexes it for RAG.
 
-Modeled directly on auto_writer.run_job: a plain asyncio task tracked in
-`running` (so it isn't garbage-collected mid-flight), progress written to
-an ImportJob row the client polls, and its own SessionLocal() since it
-outlives any single request.
+A plain asyncio task tracked in `running` (so it isn't garbage-collected
+mid-flight), progress written to an ImportJob row the client polls, and
+its own SessionLocal() since it outlives any single request.
 """
 import logging
 
@@ -18,7 +15,6 @@ from . import narou_import as ni
 from . import file_sync
 from .revisions import snapshot_revision
 from .rag import index
-from .continuity import update_character_states, check_continuity
 
 logger = logging.getLogger(__name__)
 running = {}
@@ -58,10 +54,6 @@ async def _import_episode(db, project, parsed_ep) -> bool:
         await index(_chunks(e))
     except Exception:
         logger.exception('RAG indexing failed for imported episode %s (project %s)', e.number, project.id)
-    try:
-        await update_character_states(db, project.id, e)
-    except Exception:
-        logger.exception('Character-state extraction failed for imported episode %s (project %s)', e.number, project.id)
     return created
 
 
@@ -80,7 +72,7 @@ async def run_import_job(job_id: int, text: str) -> None:
         db.commit()
 
         if job.mode == 'writers':
-            project = Project(name=parsed.name or '(無題のインポート作品)', description=parsed.description, genre=parsed.genre)
+            project = Project(name=parsed.name or '(無題のインポート)', description=parsed.description, genre=parsed.genre)
             db.add(project)
             db.commit()
             db.refresh(project)
@@ -95,7 +87,7 @@ async def run_import_job(job_id: int, text: str) -> None:
                 return
 
         for parsed_ep in sorted(parsed.episodes, key=lambda x: x.number):
-            job.last_message = f'第{parsed_ep.number}話を取り込み中…'
+            job.last_message = f'第{parsed_ep.number}件を取り込み中…'
             db.commit()
             created = await _import_episode(db, project, parsed_ep)
             job.processed_episodes += 1
@@ -105,20 +97,8 @@ async def run_import_job(job_id: int, text: str) -> None:
                 job.updated_episodes += 1
             db.commit()
 
-        if parsed.episodes:
-            job.last_message = '連続性監査を実行中…'
-            db.commit()
-            try:
-                await check_continuity(db, project.id)
-            except Exception:
-                logger.exception('Continuity audit failed after import (project %s)', project.id)
-                job.last_message = f'{len(parsed.episodes)}話を取り込みました（連続性監査は失敗しました。設定画面から再実行できます）。'
-                job.status = 'completed'
-                db.commit()
-                return
-
         job.status = 'completed'
-        job.last_message = f'{len(parsed.episodes)}話を取り込みました（新規{job.created_episodes}話・更新{job.updated_episodes}話）。'
+        job.last_message = f'{len(parsed.episodes)}件を取り込みました（新規{job.created_episodes}件・更新{job.updated_episodes}件）。'
         db.commit()
     except Exception as ex:
         logger.exception('Import job %s failed', job_id)
