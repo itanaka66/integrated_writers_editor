@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import WritePanel from "./WritePanel";
-import { api, post, put, del } from "../lib/api";
+import { api, post, put, del, streamSSE } from "../lib/api";
 import { Project } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
@@ -9,10 +9,23 @@ vi.mock("../lib/api", () => ({
   post: vi.fn(),
   put: vi.fn(),
   del: vi.fn(),
+  streamSSE: vi.fn(),
 }));
 
 const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "" };
 const episode = { id: 10, project_id: 1, number: 1, title: "第一記事", summary: "", content: "本文", updated_at: "" };
+
+// Simulates the backend's SSE stream by immediately delivering the given
+// deltas (synchronously, via the onMessage callback) as if the whole
+// response arrived in one chunk.
+function mockStream(fullText: string) {
+  vi.mocked(streamSSE).mockImplementation((_path, onMessage, onDone) => {
+    onMessage({ delta: fullText });
+    onMessage({ done: true, model: "stub-model" });
+    onDone?.();
+    return () => {};
+  });
+}
 
 describe("WritePanel", () => {
   beforeEach(() => {
@@ -20,6 +33,7 @@ describe("WritePanel", () => {
     vi.mocked(post).mockReset();
     vi.mocked(put).mockReset();
     vi.mocked(del).mockReset();
+    vi.mocked(streamSSE).mockReset();
   });
 
   it("opens the AI tool picker and runs a direct tool", async () => {
@@ -28,7 +42,7 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    vi.mocked(post).mockResolvedValue({ text: "AI結果" });
+    mockStream("AI結果");
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("🛠 AIツール")).toBeInTheDocument());
@@ -36,7 +50,9 @@ describe("WritePanel", () => {
     fireEvent.click(screen.getByText("✎ 文章を改善"));
 
     await waitFor(() => expect(screen.getByText("AI結果")).toBeInTheDocument());
-    expect(post).toHaveBeenCalledWith("/ai/generate", expect.objectContaining({ mode: "custom", episode_id: episode.id }));
+    const call = vi.mocked(streamSSE).mock.calls[0];
+    expect(call[0]).toBe("/ai/generate/stream");
+    expect(call[3]).toEqual(expect.objectContaining({ mode: "custom", episode_id: episode.id }));
   });
 
   it("runs a choice-based tool with the selected option embedded in the prompt", async () => {
@@ -45,7 +61,7 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    vi.mocked(post).mockResolvedValue({ text: "SNS向け原稿" });
+    mockStream("SNS向け原稿");
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("🛠 AIツール")).toBeInTheDocument());
@@ -54,8 +70,8 @@ describe("WritePanel", () => {
     fireEvent.click(screen.getByText("SNS投稿"));
 
     await waitFor(() => expect(screen.getByText("SNS向け原稿")).toBeInTheDocument());
-    const call = vi.mocked(post).mock.calls.find((c) => c[0] === "/ai/generate");
-    expect((call?.[1] as { instruction: string }).instruction).toContain("SNS投稿");
+    const call = vi.mocked(streamSSE).mock.calls[0];
+    expect((call[3] as { instruction: string }).instruction).toContain("SNS投稿");
   });
 
   it("adds a source for the current article", async () => {

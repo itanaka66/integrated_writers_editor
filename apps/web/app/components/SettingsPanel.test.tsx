@@ -20,8 +20,6 @@ const systemSettings = {
   ollama_url: "http://ollama:11434", ollama_url_is_override: false,
   ollama_model: "qwen3.8:27b", ollama_model_is_override: false,
   ollama_embed_model: "nomic-embed-text", ollama_embed_model_is_override: false,
-  controller_ollama_url: "http://ollama:11434", controller_ollama_url_is_override: false,
-  controller_ollama_model: "qwen3:14b", controller_ollama_model_is_override: false,
   ai_provider: "ollama",
   anthropic_api_key_is_set: false, anthropic_model: "claude-sonnet-4-5",
   openai_api_key_is_set: false, openai_model: "gpt-4o-mini",
@@ -76,5 +74,48 @@ describe("SettingsPanel AI provider section", () => {
     await waitFor(() => expect(put).toHaveBeenCalled());
     const body = vi.mocked(put).mock.calls[0][1] as Record<string, unknown>;
     expect(body.anthropic_api_key).toBe("sk-ant-newkey");
+  });
+});
+
+describe("SettingsPanel usage tab", () => {
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+  });
+
+  it("shows aggregated usage totals and per-provider rows", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.startsWith("/ai-usage/summary")) {
+        return Promise.resolve({
+          rows: [{ provider: "anthropic", model: "claude-sonnet-4-5", calls: 3, input_tokens: 1000, output_tokens: 500, estimated_cost_usd: 0.0105 }],
+          total_calls: 3, total_input_tokens: 1000, total_output_tokens: 500, total_estimated_cost_usd: 0.0105,
+        });
+      }
+      if (path.startsWith("/ai-usage/recent")) return Promise.resolve([]);
+      return Promise.resolve(systemSettings);
+    });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("使用状況"));
+    await waitFor(() => expect(screen.getByText("claude-sonnet-4-5")).toBeInTheDocument());
+    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$0.0105").length).toBeGreaterThan(0);
+  });
+
+  it("shows an unknown-cost marker when a model has no pricing entry", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.startsWith("/ai-usage/summary")) {
+        return Promise.resolve({
+          rows: [{ provider: "anthropic", model: "some-future-model", calls: 1, input_tokens: 10, output_tokens: 10, estimated_cost_usd: null }],
+          total_calls: 1, total_input_tokens: 10, total_output_tokens: 10, total_estimated_cost_usd: null,
+        });
+      }
+      if (path.startsWith("/ai-usage/recent")) return Promise.resolve([]);
+      return Promise.resolve(systemSettings);
+    });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("使用状況"));
+    await waitFor(() => expect(screen.getByText("some-future-model")).toBeInTheDocument());
+    expect(screen.getAllByText("不明").length).toBeGreaterThan(0);
   });
 });

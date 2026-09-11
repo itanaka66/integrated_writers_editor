@@ -57,3 +57,42 @@ def test_export_not_found_project(client):
 def test_export_empty_project_does_not_crash(client, project):
     r = client.get(f"/api/v1/projects/{project['id']}/export", params={"format": "epub"})
     assert r.status_code == 200
+
+
+def _setup_episode_with_source(client, project):
+    r = client.post(
+        f"/api/v1/projects/{project['id']}/episodes",
+        json={"number": 1, "title": "転移", "summary": "少年が目覚める", "content": "少年は森で目を覚ました。"},
+    )
+    episode = r.json()
+    client.post(
+        f"/api/v1/episodes/{episode['id']}/sources",
+        json={"title": "参考記事", "url": "https://example.com/article", "note": "背景情報"},
+    )
+    return episode
+
+
+def test_export_txt_includes_sources(client, project):
+    _setup_episode_with_source(client, project)
+    r = client.get(f"/api/v1/projects/{project['id']}/export", params={"format": "txt"})
+    assert "出典:" in r.text
+    assert "参考記事" in r.text
+    assert "https://example.com/article" in r.text
+    assert "背景情報" in r.text
+
+
+def test_export_markdown_includes_sources(client, project):
+    _setup_episode_with_source(client, project)
+    r = client.get(f"/api/v1/projects/{project['id']}/export", params={"format": "md"})
+    assert "**出典**" in r.text
+    assert "[参考記事](https://example.com/article)" in r.text
+
+
+def test_export_epub_includes_sources(client, project):
+    _setup_episode_with_source(client, project)
+    r = client.get(f"/api/v1/projects/{project['id']}/export", params={"format": "epub"})
+    z = zipfile.ZipFile(BytesIO(r.content))
+    chapter = z.read("OEBPS/ch1.xhtml").decode("utf-8")
+    assert "出典" in chapter
+    assert "参考記事" in chapter
+    assert "https://example.com/article" in chapter

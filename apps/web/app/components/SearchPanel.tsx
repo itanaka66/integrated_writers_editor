@@ -4,6 +4,7 @@ import { api, post } from "../lib/api";
 import { Project } from "../lib/types";
 
 type TextSearchMatch = { episode_id: number; number: number; title: string; count: number; snippets: string[] };
+type MemoSearchMatch = { memo_id: number; category: string; title: string; count: number; snippets: string[] };
 type TextReplaceEpisodeResult = { episode_id: number; number: number; title: string; replaced_count: number };
 
 export default function SearchPanel({ projectId }: { projectId: number }) {
@@ -17,6 +18,8 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
   const [caseSensitive, setCaseSensitive] = useState(true);
   const [matches, setMatches] = useState<TextSearchMatch[]>([]);
   const [totalMatches, setTotalMatches] = useState(0);
+  const [memoMatches, setMemoMatches] = useState<MemoSearchMatch[]>([]);
+  const [totalMemoMatches, setTotalMemoMatches] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [findBusy, setFindBusy] = useState(false);
   const [replaceBusy, setReplaceBusy] = useState(false);
@@ -43,6 +46,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
     try {
       const x = await api(`/projects/${projectId}/text-search?${new URLSearchParams({ query: findQ, case_sensitive: String(caseSensitive) })}`);
       setMatches(x.matches || []); setTotalMatches(x.total_matches || 0);
+      setMemoMatches(x.memo_matches || []); setTotalMemoMatches(x.total_memo_matches || 0);
       setSelected(new Set((x.matches || []).map((m: TextSearchMatch) => m.episode_id)));
       setSearched(true);
     } finally { setFindBusy(false); }
@@ -65,7 +69,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
         query: findQ, replacement: replaceQ, case_sensitive: caseSensitive, episode_ids: Array.from(selected),
       });
       setReplaceResult(x);
-      setMatches([]); setTotalMatches(0); setSelected(new Set()); setSearched(false);
+      setMatches([]); setTotalMatches(0); setMemoMatches([]); setTotalMemoMatches(0); setSelected(new Set()); setSearched(false);
     } finally { setReplaceBusy(false); }
   }
 
@@ -127,8 +131,20 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
               </div>
             </>
           )}
-          {searched && !findBusy && totalMatches === 0 && replaceResult === null && (
-            <p className="searchSource">一致する話がありませんでした。</p>
+          {totalMemoMatches > 0 && (
+            <>
+              <p className="searchSource">メモ{memoMatches.length}件で合計{totalMemoMatches}件ヒット（メモは置換対象外です。「資料」から編集してください）。</p>
+              {memoMatches.map((m) => (
+                <div className="resultCard" key={m.memo_id}>
+                  <b>{m.title || "（無題）"}</b>
+                  <span className="resultProject">{m.category}・{m.count}件</span>
+                  {m.snippets.map((s, i) => <p key={i}>{s}</p>)}
+                </div>
+              ))}
+            </>
+          )}
+          {searched && !findBusy && totalMatches === 0 && totalMemoMatches === 0 && replaceResult === null && (
+            <p className="searchSource">一致する話・メモがありませんでした。</p>
           )}
           {replaceResult && (
             <p className="searchSource">

@@ -74,14 +74,20 @@ export async function del(p: string) {
 // the browser's native EventSource — EventSource can't send an Authorization
 // header, and this API requires one on every request. Returns a function
 // that aborts the stream (call it on unmount / when switching jobs).
-export function streamSSE(path: string, onMessage: (data: unknown) => void, onDone?: () => void): () => void {
+export function streamSSE(path: string, onMessage: (data: unknown) => void, onDone?: () => void, body?: unknown): () => void {
   const controller = new AbortController();
   (async () => {
     const auth = getAuth();
     const headers = new Headers();
     if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
+    const init: RequestInit = { headers, signal: controller.signal };
+    if (body !== undefined) {
+      headers.set("Content-Type", "application/json");
+      init.method = "POST";
+      init.body = JSON.stringify(body);
+    }
     try {
-      const r = await fetch(API + path, { headers, signal: controller.signal });
+      const r = await fetch(API + path, init);
       if (r.status === 401) {
         onUnauthorized?.();
         return;

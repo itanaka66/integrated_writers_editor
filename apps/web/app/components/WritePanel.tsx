@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
-import { api, post, put, del } from "../lib/api";
+import { api, post, put, del, streamSSE } from "../lib/api";
 import { Episode, Project, Source, Template } from "../lib/types";
 import { useVoiceInput } from "../lib/useVoiceInput";
 import DiffView from "./DiffView";
@@ -180,16 +180,30 @@ export default function WritePanel({ project }: { project: Project }) {
 
   const wordCount = (e?.content || "").replace(/\s/g, "").length;
 
-  async function aiRun(mode: string, instructionOverride?: string) {
+  const cancelStreamRef = useRef<(() => void) | null>(null);
+
+  function aiRun(mode: string, instructionOverride?: string) {
     if (!e) return;
+    cancelStreamRef.current?.();
     setBusy(true);
-    try {
-      const instruction = instructionOverride ?? (inst || "既存の記事内容を守ってください");
-      setInst(instruction);
-      const x = await post("/ai/generate", { project_id: project.id, episode_id: e.id, instruction, mode, rag_limit: 6 });
-      setAi(x.text || x.detail);
-    } finally { setBusy(false); }
+    setAi("");
+    const instruction = instructionOverride ?? (inst || "既存の記事内容を守ってください");
+    setInst(instruction);
+    const body = { project_id: project.id, episode_id: e.id, instruction, mode, rag_limit: 6 };
+    let text = "";
+    cancelStreamRef.current = streamSSE(
+      "/ai/generate/stream",
+      (data) => {
+        const event = data as { delta?: string; error?: string; done?: boolean };
+        if (event.error) { setAi(event.error); return; }
+        if (event.delta) { text += event.delta; setAi(text); }
+      },
+      () => setBusy(false),
+      body,
+    );
   }
+
+  useEffect(() => () => cancelStreamRef.current?.(), []);
 
   function runTool(tool: Tool, choice?: string) {
     setShowTools(false);

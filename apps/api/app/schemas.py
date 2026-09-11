@@ -21,6 +21,19 @@ class SourceUpdate(BaseModel): title:str|None=None; url:str|None=None; note:str|
 
 class MaterialSummarizeOut(BaseModel): summary:str; model:str
 
+class AiUsageSummaryRow(BaseModel):
+    provider:str; model:str; calls:int
+    input_tokens:int; output_tokens:int; estimated_cost_usd:float|None
+
+class AiUsageSummaryOut(BaseModel):
+    rows:list[AiUsageSummaryRow]
+    total_calls:int; total_input_tokens:int; total_output_tokens:int; total_estimated_cost_usd:float|None
+
+class AiUsageLogOut(BaseModel):
+    id:int; project_id:int|None; provider:str; model:str
+    input_tokens:int|None; output_tokens:int|None; estimated_cost_usd:float|None; created_at:object
+    model_config=ConfigDict(from_attributes=True)
+
 class TemplateCreate(BaseModel): name:str=''; structure:str=''
 class TemplateOut(TemplateCreate): id:int; project_id:int; created_at:object; model_config=ConfigDict(from_attributes=True)
 class TemplateUpdate(BaseModel): name:str|None=None; structure:str|None=None
@@ -45,7 +58,7 @@ class ImportJobOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 
 class ConnectionTestRequest(BaseModel):
-    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama' | 'anthropic' | 'openai' | 'google'
+    target:str # 'database' | 'qdrant' | 'ollama' | 'anthropic' | 'openai' | 'google'
     url:str|None=None # ignored for 'database'; tests whatever value the form currently holds, saved or not
     model:str|None=None # checks the model is available, not just reachable (all targets except 'database'/'qdrant')
     api_key:str|None=None # 'anthropic' / 'openai' / 'google' only
@@ -72,8 +85,6 @@ class SystemSettingsOut(BaseModel):
     ollama_url:str; ollama_url_is_override:bool
     ollama_model:str; ollama_model_is_override:bool
     ollama_embed_model:str; ollama_embed_model_is_override:bool
-    controller_ollama_url:str; controller_ollama_url_is_override:bool
-    controller_ollama_model:str; controller_ollama_model_is_override:bool
     ai_provider:str
     anthropic_api_key_is_set:bool; anthropic_model:str
     openai_api_key_is_set:bool; openai_model:str
@@ -83,8 +94,12 @@ class SystemSettingsOut(BaseModel):
 class TextSearchMatch(BaseModel):
     episode_id:int; number:int; title:str; count:int; snippets:list[str]
 
+class MemoSearchMatch(BaseModel):
+    memo_id:int; category:str; title:str; count:int; snippets:list[str]
+
 class TextSearchResult(BaseModel):
     matches:list[TextSearchMatch]; total_matches:int
+    memo_matches:list[MemoSearchMatch]=[]; total_memo_matches:int=0
 
 class TextReplaceRequest(BaseModel):
     query:str; replacement:str; case_sensitive:bool=True
@@ -103,8 +118,6 @@ class SystemSettingsUpdate(BaseModel):
     ollama_url:str|None=None
     ollama_model:str|None=None
     ollama_embed_model:str|None=None
-    controller_ollama_url:str|None=None
-    controller_ollama_model:str|None=None
     ai_provider:str|None=None
     anthropic_api_key:str|None=None
     anthropic_model:str|None=None

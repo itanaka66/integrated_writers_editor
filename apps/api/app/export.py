@@ -16,16 +16,34 @@ def _episode_heading(e):
     return f'第{e.number}話 {e.title}'.strip()
 
 
-def build_text(project, episodes) -> str:
+def _sources_text(sources) -> list[str]:
+    if not sources:
+        return []
+    lines = ['出典:']
+    for s in sources:
+        line = f'- {s.title or "（無題）"}'
+        if s.url:
+            line += f' ({s.url})'
+        if s.note:
+            line += f' — {s.note}'
+        lines.append(line)
+    return lines
+
+
+def build_text(project, episodes, sources_by_episode=None) -> str:
+    sources_by_episode = sources_by_episode or {}
     parts = [project.name, '']
     if project.description:
         parts += [project.description, '']
     for e in episodes:
-        parts += [_episode_heading(e), '', e.content or '(本文未入力)', '', '']
+        parts += [_episode_heading(e), '', e.content or '(本文未入力)', '']
+        parts += _sources_text(sources_by_episode.get(e.id))
+        parts += ['', '']
     return '\n'.join(parts)
 
 
-def build_markdown(project, episodes) -> str:
+def build_markdown(project, episodes, sources_by_episode=None) -> str:
+    sources_by_episode = sources_by_episode or {}
     parts = [f'# {project.name}', '']
     if project.description:
         parts += [project.description, '']
@@ -33,27 +51,48 @@ def build_markdown(project, episodes) -> str:
         parts += [f'## {_episode_heading(e)}', '']
         if e.summary:
             parts += [f'> {e.summary}', '']
-        parts += [e.content or '*(本文未入力)*', '', '']
+        parts += [e.content or '*(本文未入力)*', '']
+        sources = sources_by_episode.get(e.id)
+        if sources:
+            parts += ['**出典**', '']
+            for s in sources:
+                line = f'- [{s.title or "（無題）"}]({s.url})' if s.url else f'- {s.title or "（無題）"}'
+                if s.note:
+                    line += f' — {s.note}'
+                parts.append(line)
+            parts.append('')
+        parts.append('')
     return '\n'.join(parts)
 
 
-def _epub_xhtml(title, body):
+def _epub_xhtml(title, body, sources=None):
     escaped_title = html.escape(title)
     body_html = ''.join(f'<p>{html.escape(line)}</p>' for line in (body or '').split('\n') if line.strip())
+    sources_html = ''
+    if sources:
+        items = []
+        for s in sources:
+            label = html.escape(s.title or '（無題）')
+            item = f'<a href="{html.escape(s.url)}">{label}</a>' if s.url else label
+            if s.note:
+                item += f' — {html.escape(s.note)}'
+            items.append(f'<li>{item}</li>')
+        sources_html = f'<h2>出典</h2><ul>{"".join(items)}</ul>'
     return f'''<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>{escaped_title}</title><meta charset="utf-8"/></head>
-<body><h1>{escaped_title}</h1>{body_html or '<p>(本文未入力)</p>'}</body>
+<body><h1>{escaped_title}</h1>{body_html or '<p>(本文未入力)</p>'}{sources_html}</body>
 </html>'''
 
 
-def build_epub(project, episodes) -> bytes:
+def build_epub(project, episodes, sources_by_episode=None) -> bytes:
+    sources_by_episode = sources_by_episode or {}
     book_id = f'urn:uuid:{uuid.uuid4()}'
-    chapters = [(f'ch{i}', f'第{e.number}話 {e.title}'.strip(), e.content) for i, e in enumerate(episodes, start=1)]
+    chapters = [(f'ch{i}', f'第{e.number}話 {e.title}'.strip(), e.content, sources_by_episode.get(e.id)) for i, e in enumerate(episodes, start=1)]
 
-    manifest_items = ''.join(f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>' for cid, _, _ in chapters)
-    spine_items = ''.join(f'<itemref idref="{cid}"/>' for cid, _, _ in chapters)
-    nav_items = ''.join(f'<li><a href="{cid}.xhtml">{html.escape(title)}</a></li>' for cid, title, _ in chapters)
+    manifest_items = ''.join(f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>' for cid, _, _, _ in chapters)
+    spine_items = ''.join(f'<itemref idref="{cid}"/>' for cid, _, _, _ in chapters)
+    nav_items = ''.join(f'<li><a href="{cid}.xhtml">{html.escape(title)}</a></li>' for cid, title, _, _ in chapters)
 
     content_opf = f'''<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
@@ -86,6 +125,6 @@ def build_epub(project, episodes) -> bytes:
 </container>''')
         z.writestr('OEBPS/content.opf', content_opf)
         z.writestr('OEBPS/nav.xhtml', nav_xhtml)
-        for cid, title, body in chapters:
-            z.writestr(f'OEBPS/{cid}.xhtml', _epub_xhtml(title, body))
+        for cid, title, body, sources in chapters:
+            z.writestr(f'OEBPS/{cid}.xhtml', _epub_xhtml(title, body, sources))
     return buf.getvalue()

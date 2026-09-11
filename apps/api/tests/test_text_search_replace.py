@@ -28,6 +28,21 @@ def test_search_is_case_insensitive_when_requested(client, project):
     assert r.json()["total_matches"] == 0
 
 
+def test_search_also_matches_memos(client, project):
+    pid = project["id"]
+    _add_episode(client, pid, 1, "第一話", "何もヒットしない本文")
+    client.post(f"/api/v1/projects/{pid}/memos", json={"category": "リサーチ", "title": "メモ1", "content": "森について調べたメモ"})
+    client.post(f"/api/v1/projects/{pid}/memos", json={"category": "その他", "title": "メモ2", "content": "無関係な内容"})
+
+    r = client.get(f"/api/v1/projects/{pid}/text-search", params={"query": "森"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total_matches"] == 0
+    assert body["total_memo_matches"] == 1
+    assert len(body["memo_matches"]) == 1
+    assert body["memo_matches"][0]["title"] == "メモ1"
+
+
 def test_replace_all_updates_content_and_snapshots_a_revision(client, project):
     pid = project["id"]
     e = _add_episode(client, pid, 1, "第一話", "森で火を起こした。森は静かだった。")

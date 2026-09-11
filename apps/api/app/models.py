@@ -75,6 +75,17 @@ class Template(Base):
     structure:Mapped[str]=mapped_column(Text,default='')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
 
+class AiUsageLog(Base):
+    __tablename__='ai_usage_logs'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    project_id:Mapped[int|None]=mapped_column(ForeignKey('projects.id',ondelete='SET NULL'),index=True,nullable=True)
+    provider:Mapped[str]=mapped_column(String(20))
+    model:Mapped[str]=mapped_column(String(150),default='')
+    input_tokens:Mapped[int|None]=mapped_column(Integer,nullable=True)
+    output_tokens:Mapped[int|None]=mapped_column(Integer,nullable=True)
+    estimated_cost_usd:Mapped[float|None]=mapped_column(nullable=True)
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
 class RuntimeConfig(Base):
     """A single-row table of live-editable connection settings.
 
@@ -90,8 +101,6 @@ class RuntimeConfig(Base):
     ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
     ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     ollama_embed_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
-    controller_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
-    controller_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     ai_provider:Mapped[str|None]=mapped_column(String(20),nullable=True)
     anthropic_api_key:Mapped[str|None]=mapped_column(String(300),nullable=True)
     anthropic_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
