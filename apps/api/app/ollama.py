@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import httpx
 from .runtime_config import get_effective_config
@@ -36,9 +37,33 @@ async def generate(prompt,model=None,url=None,timeout=240):
  r=await _post_with_retry(base+'/api/generate',{'model':m,'prompt':prompt,'stream':False},timeout)
  return r.json().get('response',''),m
 
-async def controller_generate(prompt):
+async def generate_with_usage(prompt,model=None,url=None,timeout=240):
+ """Same as generate(), but also returns Ollama's own token counts
+ (prompt_eval_count/eval_count) so callers can log usage — see usage.py."""
  cfg=get_effective_config()
- return await generate(prompt, cfg.controller_ollama_model, cfg.controller_ollama_url, 180)
+ m=model or cfg.ollama_model
+ base=(url or cfg.ollama_url).rstrip('/')
+ r=await _post_with_retry(base+'/api/generate',{'model':m,'prompt':prompt,'stream':False},timeout)
+ data=r.json()
+ usage={'input_tokens':data.get('prompt_eval_count'),'output_tokens':data.get('eval_count')}
+ return data.get('response',''),m,usage
+
+async def stream_generate(prompt,model=None,url=None,timeout=240):
+ """Yields response text deltas as they arrive, then a final usage dict."""
+ cfg=get_effective_config()
+ m=model or cfg.ollama_model
+ base=(url or cfg.ollama_url).rstrip('/')
+ usage={'input_tokens':None,'output_tokens':None}
+ async with httpx.AsyncClient(timeout=timeout) as c:
+  async with c.stream('POST',base+'/api/generate',json={'model':m,'prompt':prompt,'stream':True}) as r:
+   r.raise_for_status()
+   async for line in r.aiter_lines():
+    if not line:continue
+    chunk=json.loads(line)
+    if chunk.get('response'):yield {'delta':chunk['response']}
+    if chunk.get('done'):
+     usage={'input_tokens':chunk.get('prompt_eval_count'),'output_tokens':chunk.get('eval_count')}
+ yield {'done':True,'model':m,'usage':usage}
 
 async def embed(texts):
  cfg=get_effective_config()

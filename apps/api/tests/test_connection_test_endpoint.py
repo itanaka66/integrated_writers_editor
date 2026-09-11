@@ -44,7 +44,7 @@ def test_test_connection_ollama_with_model(client, monkeypatch):
         return (False, "モデルが見つかりません", 20)
 
     monkeypatch.setattr(connection_test, "test_ollama", fake)
-    r = client.post("/api/v1/system-settings/test-connection", json={"target": "controller_ollama", "url": "http://ollama:11434", "model": "qwen3:14b"})
+    r = client.post("/api/v1/system-settings/test-connection", json={"target": "ollama", "url": "http://ollama:11434", "model": "qwen3:14b"})
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is False

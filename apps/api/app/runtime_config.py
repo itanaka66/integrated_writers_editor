@@ -1,7 +1,7 @@
 """Resolves the connection settings actually in effect right now.
 
-Qdrant and both Ollama endpoints (Writer / Controller) can be overridden
-live from the 設定 → 接続設定 screen, stored in the single-row
+Qdrant and the Ollama endpoint can be overridden live from the 設定 →
+接続設定 screen, stored in the single-row
 `runtime_config` table. DATABASE_URL is not — see models.RuntimeConfig's
 docstring for why. Every AI/vector call in this app is already stateless
 (a fresh client per call), so honoring an override here doesn't need a
@@ -23,8 +23,6 @@ class EffectiveConfig:
     ollama_url: str
     ollama_model: str
     ollama_embed_model: str
-    controller_ollama_url: str
-    controller_ollama_model: str
     ai_provider: str = 'ollama'
     anthropic_api_key: str = ''
     anthropic_model: str = ''
@@ -61,8 +59,6 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_url=_pick(row.ollama_url if row else None, env_settings.ollama_url),
         ollama_model=_pick(row.ollama_model if row else None, env_settings.ollama_model),
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
-        controller_ollama_url=_pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url),
-        controller_ollama_model=_pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model),
         ai_provider=_pick(row.ai_provider if row else None, env_settings.ai_provider),
         anthropic_api_key=_pick(row.anthropic_api_key if row else None, env_settings.anthropic_api_key),
         anthropic_model=_pick(row.anthropic_model if row else None, env_settings.anthropic_model),

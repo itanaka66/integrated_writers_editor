@@ -7,7 +7,6 @@ def test_defaults_reflect_env_settings_with_no_override(client):
     body = r.json()
     assert body["qdrant_url_is_override"] is False
     assert body["ollama_url_is_override"] is False
-    assert body["controller_ollama_url_is_override"] is False
     assert "database_url_masked" in body
     assert "***" in body["database_url_masked"] or "@" not in body["database_url_masked"]
 

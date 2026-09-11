@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, downloadFile, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
-import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
 import { ensureNotificationPermission, notify } from "../lib/notify";
 
 type ImportJob = {
@@ -22,8 +21,6 @@ type SystemSettings = {
   ollama_url: string; ollama_url_is_override: boolean;
   ollama_model: string; ollama_model_is_override: boolean;
   ollama_embed_model: string; ollama_embed_model_is_override: boolean;
-  controller_ollama_url: string; controller_ollama_url_is_override: boolean;
-  controller_ollama_model: string; controller_ollama_model_is_override: boolean;
   ai_provider: string;
   anthropic_api_key_is_set: boolean; anthropic_model: string;
   openai_api_key_is_set: boolean; openai_model: string;
@@ -37,8 +34,18 @@ const AI_PROVIDERS = [
   { value: "google", label: "Gemini（Google）" },
 ];
 
+type AiUsageSummaryRow = { provider: string; model: string; calls: number; input_tokens: number; output_tokens: number; estimated_cost_usd: number | null };
+type AiUsageSummary = { rows: AiUsageSummaryRow[]; total_calls: number; total_input_tokens: number; total_output_tokens: number; total_estimated_cost_usd: number | null };
+type AiUsageLogRow = { id: number; project_id: number | null; provider: string; model: string; input_tokens: number | null; output_tokens: number | null; estimated_cost_usd: number | null; created_at: string };
+
+function formatCost(v: number | null): string {
+  return v === null ? "不明" : `$${v.toFixed(4)}`;
+}
+
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export">("basic");
+  const [tab, setTab] = useState<"basic" | "connection" | "usage" | "import" | "backup" | "export">("basic");
+  const [usageSummary, setUsageSummary] = useState<AiUsageSummary | null>(null);
+  const [usageRecent, setUsageRecent] = useState<AiUsageLogRow[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -47,11 +54,9 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500 });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [defaults, setDefaults] = useState(loadModelDefaults());
   const [sys, setSys] = useState<SystemSettings | null>(null);
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
-    controller_ollama_url: "", controller_ollama_model: "",
     ai_provider: "ollama",
     anthropic_api_key: "", anthropic_model: "",
     openai_api_key: "", openai_model: "",
@@ -111,8 +116,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSys(s);
       setSysForm({
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
+        ollama_embed_model: s.ollama_embed_model,
         ai_provider: s.ai_provider,
         anthropic_api_key: "", anthropic_model: s.anthropic_model,
         openai_api_key: "", openai_model: s.openai_model,
@@ -126,12 +130,17 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     loadBackupStatus();
   }, [tab]);
 
+  useEffect(() => {
+    if (tab !== "usage") return;
+    api("/ai-usage/summary").then(setUsageSummary);
+    api("/ai-usage/recent?limit=50").then(setUsageRecent);
+  }, [tab]);
+
   function applySettingsResponse(s: SystemSettings) {
     setSys(s);
     setSysForm({
       qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-      ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-      controller_ollama_model: s.controller_ollama_model,
+      ollama_embed_model: s.ollama_embed_model,
       ai_provider: s.ai_provider,
       // API keys never come back from the server (see SystemSettingsOut) —
       // always reset these to blank so re-saving unrelated fields can't
@@ -213,8 +222,8 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       <h1>設定</h1>
       <div className="twinTabs">
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>基本設定</button>
-        <button className={tab === "ai" ? "on" : ""} onClick={() => setTab("ai")}>AI設定</button>
         <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
+        <button className={tab === "usage" ? "on" : ""} onClick={() => setTab("usage")}>使用状況</button>
         <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>インポート</button>
         <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>バックアップ</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
@@ -228,19 +237,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
           <label>作品ルール（詳細設定）<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
           <div className="entityFormActions">
             <button onClick={save} disabled={busy}>{busy ? "保存中..." : "保存"}</button>
-            {saved && <span className="savedNote">保存しました</span>}
-          </div>
-        </div>
-      )}
-      {tab === "ai" && (
-        <div className="entityForm" style={{ marginTop: 14 }}>
-          <label>Writerモデル（既定値）<input value={defaults.writer} onChange={(e) => setDefaults({ ...defaults, writer: e.target.value })} placeholder="qwen3.8:27b" /></label>
-          <label>Controllerモデル（既定値）<input value={defaults.controller} onChange={(e) => setDefaults({ ...defaults, controller: e.target.value })} placeholder="qwen3:14b" /></label>
-          <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-            ここで保存した値は、このブラウザでの「自動執筆」開始フォームの初期値として使われます。実際のOllama接続先（A770 / RTX3090のURL）はサーバー側の環境変数（CONTROLLER_OLLAMA_URL / OLLAMA_URL）で設定してください。
-          </p>
-          <div className="entityFormActions">
-            <button onClick={() => { saveModelDefaults(defaults); setSaved(true); }}>保存</button>
             {saved && <span className="savedNote">保存しました</span>}
           </div>
         </div>
@@ -290,21 +286,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} />
                 {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
               </div>
-
-              <label>
-                Ollama 2（Controller）URL {sys.controller_ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
-                <input value={sysForm.controller_ollama_url} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_url: e.target.value })} placeholder="http://ollama:11434" />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="controller_ollama" url={sysForm.controller_ollama_url} model={sysForm.controller_ollama_model} />
-                {sys.controller_ollama_url_is_override && <button type="button" onClick={() => resetField("controller_ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
-              </div>
-
-              <label>
-                Ollama 2（Controller）モデル {sys.controller_ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
-                <input value={sysForm.controller_ollama_model} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_model: e.target.value })} />
-              </label>
-              {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
 
               <label style={{ gridColumn: "1/-1" }}>
                 使用するAIプロバイダー（記事生成・チャット・資料要約に使用）
@@ -364,6 +345,49 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               <div className="entityFormActions">
                 <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? "保存中..." : "保存"}</button>
                 {sysSaved && <span className="savedNote">保存しました</span>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {tab === "usage" && (
+        <div style={{ marginTop: 14 }}>
+          {!usageSummary && <p>読み込み中...</p>}
+          {usageSummary && (
+            <>
+              <p style={{ color: "#687386", fontSize: 12 }}>
+                プロジェクトを問わず、このサーバー全体でのAI呼び出し実績です。金額は概算の目安であり、実際の請求額とは異なる場合があります（不明な場合は「不明」と表示されます）。ローカルLLM（Ollama）は常に$0として扱います。
+              </p>
+              <div className="progressStats">
+                <div><small>総呼び出し回数</small><b>{usageSummary.total_calls}</b></div>
+                <div><small>入力トークン合計</small><b>{usageSummary.total_input_tokens.toLocaleString()}</b></div>
+                <div><small>出力トークン合計</small><b>{usageSummary.total_output_tokens.toLocaleString()}</b></div>
+                <div><small>概算コスト合計</small><b>{formatCost(usageSummary.total_estimated_cost_usd)}</b></div>
+              </div>
+              <div className="stateTable" style={{ marginTop: 14 }}>
+                {usageSummary.rows.length === 0 && <p style={{ padding: 12 }}>まだAI呼び出しの記録がありません。</p>}
+                {usageSummary.rows.map((r) => (
+                  <div className="stateRow" key={`${r.provider}-${r.model}`} style={{ gridTemplateColumns: "1fr 1fr 80px 100px 100px 100px" }}>
+                    <span>{r.provider}</span>
+                    <span>{r.model}</span>
+                    <span>{r.calls}回</span>
+                    <span>入力 {r.input_tokens.toLocaleString()}</span>
+                    <span>出力 {r.output_tokens.toLocaleString()}</span>
+                    <span>{formatCost(r.estimated_cost_usd)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 20 }}>
+                <small>直近の呼び出し履歴（最新{usageRecent.length}件）</small>
+                {usageRecent.length === 0 && <p className="searchSource">まだ履歴がありません。</p>}
+                {usageRecent.map((r) => (
+                  <div className="resultCard" key={r.id}>
+                    <b>{r.provider} / {r.model}</b>
+                    <p>
+                      入力{r.input_tokens ?? "?"}・出力{r.output_tokens ?? "?"}トークン / {formatCost(r.estimated_cost_usd)} / {new Date(r.created_at).toLocaleString("ja-JP")}
+                    </p>
+                  </div>
+                ))}
               </div>
             </>
           )}

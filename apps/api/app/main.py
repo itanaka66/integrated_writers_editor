@@ -3,13 +3,14 @@ import json
 import re
 from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .db import get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
-from .providers import generate, ProviderError
+from .providers import generate, generate_stream, ProviderError
 from .rag import index,search,search_all_projects
 from .context import build
 from .auth import BasicAuthMiddleware
@@ -96,13 +97,16 @@ def content_disposition(filename,ext):
 def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ sources_by_episode={}
+ for s in db.scalars(select(Source).where(Source.project_id==pid)).all():
+  sources_by_episode.setdefault(s.episode_id,[]).append(s)
  name=p.name or f'project-{pid}'
  if format=='txt':
-  return Response(export_mod.build_text(p,eps),media_type='text/plain; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'txt')})
+  return Response(export_mod.build_text(p,eps,sources_by_episode),media_type='text/plain; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'txt')})
  if format=='md':
-  return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
+  return Response(export_mod.build_markdown(p,eps,sources_by_episode),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
-  return Response(export_mod.build_epub(p,eps),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+  return Response(export_mod.build_epub(p,eps,sources_by_episode),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
  raise HTTPException(400,'format must be one of: txt, md, epub')
 
 def _system_settings_out(db):
@@ -115,8 +119,6 @@ def _system_settings_out(db):
   ollama_url=cfg.ollama_url,ollama_url_is_override=override(row.ollama_url if row else None),
   ollama_model=cfg.ollama_model,ollama_model_is_override=override(row.ollama_model if row else None),
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
-  controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
-  controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
   ai_provider=cfg.ai_provider,
   anthropic_api_key_is_set=bool(cfg.anthropic_api_key),anthropic_model=cfg.anthropic_model,
   openai_api_key_is_set=bool(cfg.openai_api_key),openai_model=cfg.openai_model,
@@ -150,7 +152,7 @@ def system_settings_test_connection(x:ConnectionTestRequest):
  elif x.target=='qdrant':
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_qdrant(x.url)
- elif x.target in ('ollama','controller_ollama'):
+ elif x.target=='ollama':
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_ollama(x.url,x.model)
  elif x.target=='anthropic':
@@ -183,7 +185,12 @@ def project_text_search(pid:int,query:str,case_sensitive:bool=True,db:Session=De
  for e in eps:
   c=_count(e.content or '',query,case_sensitive)
   if c:matches.append(TextSearchMatch(episode_id=e.id,number=e.number,title=e.title,count=c,snippets=_snippets(e.content or '',query,case_sensitive)))
- return TextSearchResult(matches=matches,total_matches=sum(m.count for m in matches))
+ memos_=list(db.scalars(select(Memo).where(Memo.project_id==pid).order_by(Memo.id)).all())
+ memo_matches=[]
+ for m in memos_:
+  c=_count(m.content or '',query,case_sensitive)
+  if c:memo_matches.append(MemoSearchMatch(memo_id=m.id,category=m.category,title=m.title,count=c,snippets=_snippets(m.content or '',query,case_sensitive)))
+ return TextSearchResult(matches=matches,total_matches=sum(m.count for m in matches),memo_matches=memo_matches,total_memo_matches=sum(m.count for m in memo_matches))
 @app.post('/api/v1/projects/{pid}/text-replace',response_model=TextReplaceResult)
 async def project_text_replace(pid:int,x:TextReplaceRequest,db:Session=Depends(get_db)):
  if not x.query:raise HTTPException(400,'query must not be empty')
@@ -322,10 +329,25 @@ async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
  task={'continue':'本文の続きを書く','summary':'本文を要約する','proofread':'表現・誤字脱字を校正する'}.get(x.mode,'依頼を実行する')
  prompt=f'''あなたは記事編集AIです。既存の記事内容を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
- try:t,m=await generate(prompt)
+ try:t,m=await generate(prompt,x.project_id)
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return {'text':t,'model':m,'context':{'rag':len(c['rag'])}}
+
+@app.post('/api/v1/ai/generate/stream')
+async def ai_stream(x:AIGenerate,db:Session=Depends(get_db)):
+ e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
+ task={'continue':'本文の続きを書く','summary':'本文を要約する','proofread':'表現・誤字脱字を校正する'}.get(x.mode,'依頼を実行する')
+ prompt=f'''あなたは記事編集AIです。既存の記事内容を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
+ async def gen():
+  try:
+   async for event in generate_stream(prompt,x.project_id):
+    yield f'data: {json.dumps(event,ensure_ascii=False)}\n\n'
+  except ProviderError as ex:
+   yield f'data: {json.dumps({"error":str(ex)},ensure_ascii=False)}\n\n'
+  except Exception as ex:
+   yield f'data: {json.dumps({"error":f"AI provider error: {ex}"},ensure_ascii=False)}\n\n'
+ return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 
 @app.get('/api/v1/projects/{pid}/chat',response_model=list[ChatMessageOut])
 def chat_history(pid:int,limit:int=200,db:Session=Depends(get_db)):
@@ -338,7 +360,7 @@ async def chat_send(pid:int,x:ChatMessageCreate,db:Session=Depends(get_db)):
  c=await build(db,pid,None,8)
  prompt=f'''あなたは記事作成のAIチャットアシスタントです。既存の記事内容を最優先してください。\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n質問:{x.content}\n日本語で出力してください。'''
  try:
-  t,_=await generate(prompt)
+  t,_=await generate(prompt,pid)
  except Exception as ex:
   t=f'エラーが発生しました。AIサービスの状態を確認してください。（{ex}）'
  assistant_msg=ChatMessage(project_id=pid,role='assistant',content=t);db.add(assistant_msg);db.commit();db.refresh(assistant_msg)
@@ -393,4 +415,29 @@ def template_add(pid:int,x:TemplateCreate,db:Session=Depends(get_db)):o=Template
 def template_put(tid:int,x:TemplateUpdate,db:Session=Depends(get_db)):return crud_update(db,Template,tid,x,'Template')
 @app.delete('/api/v1/templates/{tid}',status_code=204)
 def template_delete(tid:int,db:Session=Depends(get_db)):crud_delete(db,Template,tid,'Template')
+
+@app.get('/api/v1/ai-usage/summary',response_model=AiUsageSummaryOut)
+def ai_usage_summary(db:Session=Depends(get_db)):
+ rows=list(db.scalars(select(AiUsageLog)).all())
+ grouped={}
+ for r in rows:
+  key=(r.provider,r.model)
+  g=grouped.setdefault(key,{'calls':0,'input_tokens':0,'output_tokens':0,'estimated_cost_usd':0.0,'cost_known':True})
+  g['calls']+=1
+  g['input_tokens']+=r.input_tokens or 0
+  g['output_tokens']+=r.output_tokens or 0
+  if r.estimated_cost_usd is None:g['cost_known']=False
+  else:g['estimated_cost_usd']+=r.estimated_cost_usd
+ summary_rows=[AiUsageSummaryRow(provider=p,model=m,calls=g['calls'],input_tokens=g['input_tokens'],output_tokens=g['output_tokens'],estimated_cost_usd=round(g['estimated_cost_usd'],6) if g['cost_known'] else None) for (p,m),g in grouped.items()]
+ total_cost_known=all(r.estimated_cost_usd is not None for r in summary_rows) if summary_rows else True
+ return AiUsageSummaryOut(
+  rows=summary_rows,
+  total_calls=sum(r.calls for r in summary_rows),
+  total_input_tokens=sum(r.input_tokens for r in summary_rows),
+  total_output_tokens=sum(r.output_tokens for r in summary_rows),
+  total_estimated_cost_usd=round(sum(r.estimated_cost_usd for r in summary_rows),6) if total_cost_known and summary_rows else None,
+ )
+@app.get('/api/v1/ai-usage/recent',response_model=list[AiUsageLogOut])
+def ai_usage_recent(limit:int=50,db:Session=Depends(get_db)):
+ return list(db.scalars(select(AiUsageLog).order_by(AiUsageLog.id.desc()).limit(clamp_limit(limit))).all())
 
