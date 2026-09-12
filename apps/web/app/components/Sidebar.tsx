@@ -1,5 +1,6 @@
 "use client";
 import { Project } from "../lib/types";
+import { clearAuth } from "../lib/api";
 
 export type Section = "home" | "write" | "materials" | "search" | "chat" | "settings";
 
@@ -25,6 +26,7 @@ export default function Sidebar({ project, section, onSection, onDashboard }: {
           <button key={n.key} className={section === n.key ? "nav active" : "nav"} onClick={() => onSection(n.key)}>{n.label}</button>
         ))}
       </div>
+      <button className="appSidebarLogout" onClick={() => { clearAuth(); window.location.reload(); }}>⏻ ログアウト</button>
     </aside>
   );
 }
