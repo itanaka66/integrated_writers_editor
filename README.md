@@ -2,7 +2,54 @@
 
 日本語版はこちら → [README.ja.md](README.ja.md)
 
-An AI-assisted writing environment for long-form writerss (from a handful of episodes up to ~500), built around a structured story database — characters, world, plot, foreshadowing, timeline — that the AI reads before generating text, so long-running stories stay internally consistent. Runs entirely on your own machine/server with a local [Ollama](https://ollama.com) LLM; no external cloud AI API is called.
+An AI-assisted article/writing editor. Runs entirely on your own machine/server; the AI backend is your choice — a local [Ollama](https://ollama.com) LLM (no data leaves your machine) or a cloud provider (Claude / ChatGPT / Gemini) via your own API key, switchable anytime from 設定 > 接続設定.
+
+## Software & Hardware Requirements
+
+### Option A — Docker (recommended)
+
+| Requirement | Version / Spec | Notes |
+|---|---|---|
+| Docker Engine | 24+ | Includes the Compose v2 plugin (`docker compose`, not the old `docker-compose`) |
+| Disk space | 5 GB+ free | PostgreSQL/Qdrant volumes + built images |
+| RAM | 4 GB+ | 8 GB+ recommended if you also run a local Ollama model on the same machine |
+| Internet access | Only if using a cloud AI provider | Not required if using local Ollama only |
+
+Docker Desktop (Windows/macOS) or Docker Engine + the Compose plugin (Linux) both work.
+
+### Option B — Running services natively (no Docker)
+
+| Component | Requirement |
+|---|---|
+| Backend (`apps/api`) | Python 3.13 |
+| Frontend (`apps/web`) | Node.js 22, npm |
+| Database | PostgreSQL 17 |
+| Vector store | Qdrant (any recent version — used for semantic search) |
+
+### AI backend (pick one, changeable anytime from 設定 > 接続設定)
+
+| Backend | Requirement |
+|---|---|
+| Local LLM (Ollama, default) | [Ollama](https://ollama.com) installed on your machine/server; a GPU with enough VRAM for your chosen model is strongly recommended; no internet or API key required |
+| Claude (Anthropic) | An Anthropic API key + internet access |
+| ChatGPT (OpenAI) | An OpenAI API key + internet access |
+| Gemini (Google) | A Google AI API key + internet access |
+
+RAG semantic search embeddings always use a local Ollama embedding model (`nomic-embed-text` by default), regardless of which AI backend you pick for generation.
+
+### Ports used
+
+| Port | Service |
+|---|---|
+| 3000 | Web frontend |
+| 8000 | API (also serves `/docs` — interactive OpenAPI UI) |
+| 5432 | PostgreSQL |
+| 6333 / 6334 | Qdrant (HTTP / gRPC) |
+| 11434 | Ollama (only if using the local LLM backend; not started by Docker Compose) |
+
+### Browser
+
+Any current Chrome, Edge, Firefox, or Safari.
 
 ## Documentation
 
