@@ -2,7 +2,54 @@
 
 English version → [README.md](README.md)
 
-記事執筆を支援するAIアシスト付きエディタです。プロジェクトとエピソード（記事）を管理し、アイデア出し・構成・SEOキーワード・見出し改善・ファクトチェック・キャッチコピー生成などをAIに手伝わせながら、メモや参考資料（ソース）を下書きと一緒に管理できます。ローカルの[Ollama](https://ollama.com)、またはクラウドプロバイダ（Anthropic Claude、OpenAI、Google Gemini）のいずれかを選んで利用できます。
+AI支援付きの記事・文章作成エディタです。すべて自分のPC・サーバー上で動作します。AIのバックエンドは自由に選択可能で、ローカルの[Ollama](https://ollama.com)（データは一切外部に送信されません）、またはClaude／ChatGPT／Geminiなどのクラウドプロバイダー（ご自身のAPIキーを使用）のどちらでも利用でき、設定＞接続設定からいつでも切り替えられます。
+
+## ソフトウェア・ハードウェア要件
+
+### 方式A — Docker（推奨）
+
+| 要件 | バージョン／スペック | 補足 |
+|---|---|---|
+| Docker Engine | 24以上 | Compose v2プラグイン（`docker compose`。古い`docker-compose`ではない）を含むこと |
+| 空きディスク容量 | 5GB以上 | PostgreSQL/Qdrantのボリューム＋ビルド済みイメージ |
+| メモリ | 4GB以上 | 同じマシンでローカルOllamaも動かす場合は8GB以上推奨 |
+| インターネット接続 | クラウドAIプロバイダーを使う場合のみ必要 | ローカルOllamaのみ使う場合は不要 |
+
+Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグインのどちらでも動作します。
+
+### 方式B — Dockerを使わずネイティブに構築する場合
+
+| コンポーネント | 要件 |
+|---|---|
+| バックエンド（`apps/api`） | Python 3.13 |
+| フロントエンド（`apps/web`） | Node.js 22、npm |
+| データベース | PostgreSQL 17 |
+| ベクトルストア | Qdrant（比較的新しいバージョンであればOK。セマンティック検索に使用） |
+
+### AIバックエンド（いずれか1つを選択。設定＞接続設定からいつでも変更可）
+
+| バックエンド | 要件 |
+|---|---|
+| ローカルLLM（Ollama、既定） | [Ollama](https://ollama.com)を自分のマシン／サーバーに導入。選んだモデルに見合ったVRAMを持つGPUを強く推奨。インターネット接続・APIキーは不要 |
+| Claude（Anthropic） | Anthropic APIキー＋インターネット接続 |
+| ChatGPT（OpenAI） | OpenAI APIキー＋インターネット接続 |
+| Gemini（Google） | Google AI APIキー＋インターネット接続 |
+
+RAGセマンティック検索の埋め込みは、生成に使うAIバックエンドに関わらず、常にローカルのOllama埋め込みモデル（既定は`nomic-embed-text`）を使用します。
+
+### 使用ポート
+
+| ポート | サービス |
+|---|---|
+| 3000 | フロントエンド（Web） |
+| 8000 | API（`/docs`でOpenAPIのインタラクティブUIも提供） |
+| 5432 | PostgreSQL |
+| 6333 / 6334 | Qdrant（HTTP / gRPC） |
+| 11434 | Ollama（ローカルLLMバックエンドを使う場合のみ。Docker Composeでは起動しません） |
+
+### ブラウザ
+
+最新のChrome、Edge、Firefox、Safariのいずれか。
 
 ## ドキュメント
 
