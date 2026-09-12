@@ -38,9 +38,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      CONTROLLER_OLLAMA_URL: ${CONTROLLER_OLLAMA_URL:-http://host.docker.internal:11434}
-      CONTROLLER_OLLAMA_MODEL: ${CONTROLLER_OLLAMA_MODEL:-qwen3:14b}
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your .env before running}
       writers_STORAGE_DIR: /writers_storage
