@@ -26,13 +26,35 @@ Ollamaは常にホスト側で動かします（Docker Composeは起動しませ
 
 ## 2. 方式A — Docker Compose
 
+### 最も簡単な方法：対話式セットアップスクリプト
+
+Dockerに不慣れな方や、Windows/macOS/Linux/クラウドVMを問わず最速でセットアップしたい方は、リポジトリをクローンしてセットアップスクリプトを実行してください。いくつかのYes/No質問（PostgreSQL/Qdrantを同梱コンテナで動かすか外部のものを使うか、Ollamaをどこで動かすか、管理者パスワードを自動生成するか）に答えるだけで、コンテナが起動します。
+
+```bash
+git clone <このリポジトリのURL>
+cd integrated_writers_editor
+./scripts/setup.sh
+```
+
+Windowsでは、代わりに通常のPowerShellプロンプト（管理者権限は不要）からPowerShell版を実行してください。
+
+```powershell
+git clone <このリポジトリのURL>
+cd integrated_writers_editor
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+どちらのスクリプトも、Docker（Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン）が事前にインストール・起動済みであることが前提です。詳細は[requirements.ja.md](requirements.ja.md)を参照してください。`.env`の各値を自分で細かく制御したい場合や、スクリプトが対応していない設定が必要な場合は、以下の手動手順に進んでください。
+
+### 手動手順
+
 ```bash
 git clone <このリポジトリのURL>
 cd integrated_writers_editor
 cp .env.example .env
 ```
 
-`.env`を編集し、実際の`ADMIN_PASSWORD`を設定してください（未設定だとComposeが起動を拒否します。各変数の意味は[requirements.ja.md](requirements.ja.md)を参照）。Ollamaを別マシンで動かす場合は`OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`も変更してください。
+`.env`を編集し、実際の`ADMIN_PASSWORD`を設定してください（未設定だとComposeが起動を拒否します。各変数の意味は[requirements.ja.md](requirements.ja.md)を参照）。Ollamaを別マシンで動かす場合は`OLLAMA_URL`も変更してください。
 
 ```bash
 docker compose up --build
@@ -112,6 +134,6 @@ http://localhost:3000 を開きます。
 |---|---|
 | `docker compose up`が`ADMIN_PASSWORD`エラーで即失敗する | `.env.example`から`.env`を作成していない、または`ADMIN_PASSWORD`が未設定 |
 | ダッシュボードが「確認中...」「起動中...」のまま固まる | `NEXT_PUBLIC_API_URL`にAPIが到達できていない、またはログインできていない（ブラウザのネットワークタブで401か接続エラーかを確認） |
-| 自動執筆ジョブがすぐに`error`になり接続エラーが表示される | Ollamaが起動していない、または`OLLAMA_URL`/`CONTROLLER_OLLAMA_URL`が誤っている（`http://host.docker.internal:11434`はWindows/macOSのDocker内からのみ解決可能。Linuxではホストのアドレスを別途指定するか、Ollamaを同じComposeネットワークで動かしてください） |
+| AIリクエストがすぐに接続エラーで失敗する | Ollamaが起動していない、または`OLLAMA_URL`が誤っている（`http://host.docker.internal:11434`はWindows/macOSのDocker内からのみ解決可能。Linuxではホストのアドレスを別途指定するか、Ollamaを同じComposeネットワークで動かしてください） |
 | `api`コンテナ起動時に`relation "projects" already exists`エラー | このプロジェクトがAlembic導入前に作られた古いPostgresボリュームが残っています。`docker compose down -v`でリセット（**全データ削除**）するか、データを残したい場合はそのDBに対して手動で`alembic stamp head`を実行してください |
 | 検索が常に「全文一致 (PostgreSQL フォールバック)」になる | `QDRANT_URL`にQdrantが到達できていません。セマンティック検索は失敗時に単純な`ILIKE`一致検索へ自動的に切り替わります |

@@ -26,13 +26,35 @@ Ollama always runs on the host (Docker Compose does not start it), so do this re
 
 ## 2. Option A — Docker Compose
 
+### Easiest: the interactive setup script
+
+New to Docker, or just want the fastest path on Windows, macOS, Linux, or a cloud VM? Clone the repo and run the setup script — it asks a few yes/no questions (use the bundled PostgreSQL/Qdrant or an external one, where Ollama lives, whether to generate an admin password) and starts the containers for you:
+
+```bash
+git clone <this repository's URL>
+cd integrated_writers_editor
+./scripts/setup.sh
+```
+
+On Windows, use the PowerShell equivalent instead (run from a regular PowerShell prompt — Run as Administrator is not required):
+
+```powershell
+git clone <this repository's URL>
+cd integrated_writers_editor
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+Either script requires Docker (Desktop on Windows/macOS, Engine + Compose plugin on Linux) to already be installed and running — see [requirements.md](requirements.md). Skip to the manual steps below if you'd rather control every `.env` value yourself, or need something the script doesn't ask about.
+
+### Manual steps
+
 ```bash
 git clone <this repository's URL>
 cd integrated_writers_editor
 cp .env.example .env
 ```
 
-Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`.
+Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL`.
 
 ```bash
 docker compose up --build
@@ -112,6 +134,6 @@ There is a single shared admin account, not per-user accounts — see [requireme
 |---|---|
 | `docker compose up` fails immediately with an `ADMIN_PASSWORD` error | You didn't create `.env` from `.env.example`, or left `ADMIN_PASSWORD` unset |
 | Dashboard stuck on "確認中..." / "起動中..." forever | The API isn't reachable at `NEXT_PUBLIC_API_URL`, or you're not logged in — check the browser's network tab for 401s vs connection errors |
-| Auto-write jobs immediately go to `error` with a connection message | Ollama isn't running, or `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL` don't point at it (`http://host.docker.internal:11434` only resolves from inside Docker on Windows/macOS; on Linux use the host's LAN IP or run Ollama in the same Compose network) |
+| AI requests immediately fail with a connection message | Ollama isn't running, or `OLLAMA_URL` doesn't point at it (`http://host.docker.internal:11434` only resolves from inside Docker on Windows/macOS; on Linux use the host's LAN IP or run Ollama in the same Compose network) |
 | `relation "projects" already exists` on `api` container startup | You have an old Postgres volume created before this project adopted Alembic migrations. Run `docker compose down -v` to reset it (**destroys all data**) or manually `alembic stamp head` against that database if you need to keep it |
 | Search always falls back to "全文一致 (PostgreSQL フォールバック)" | Qdrant isn't reachable at `QDRANT_URL` — semantic search silently degrades to a plain `ILIKE` match instead of failing |
