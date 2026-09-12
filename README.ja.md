@@ -64,6 +64,14 @@ RAGセマンティック検索の埋め込みは、生成に使うAIバックエ
 
 ## クイックスタート
 
+Dockerに不慣れな方や最速でセットアップしたい方は、リポジトリをクローンして対話式セットアップスクリプトを実行してください。Windows・macOS・Linux・クラウドVMのいずれでも同じ手順で、いくつかのYes/No質問に答えるだけでセットアップが完了します。
+
+```bash
+./scripts/setup.sh          # Windows: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+すべて自分で設定したい場合：
+
 ```bash
 cp .env.example .env   # ADMIN_PASSWORD（必須）とOllamaのURLを必要に応じて編集
 docker compose up --build

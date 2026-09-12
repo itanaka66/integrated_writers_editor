@@ -64,6 +64,14 @@ Browse the online manual: **https://itanaka66.github.io/integrated_writers_edito
 
 ## Quick start
 
+New to Docker, or just want the fastest path? Clone the repo and run the interactive setup script — it works the same way on Windows, macOS, Linux, and cloud VMs, asks a few yes/no questions, and starts everything for you:
+
+```bash
+./scripts/setup.sh          # Windows: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+Prefer to configure everything by hand?
+
 ```bash
 cp .env.example .env   # then edit ADMIN_PASSWORD (required) and Ollama URLs if needed
 docker compose up --build
