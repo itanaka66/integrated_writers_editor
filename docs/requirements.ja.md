@@ -29,18 +29,18 @@ Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン�
 
 ネイティブ構築でもOllamaと（ベクトル検索を使うなら）Qdrantは別途必要です。DockerはPostgres/Qdrant/アプリのコンテナだけを代替するもので、LLM実行環境（GPUを使うためほぼ常にホスト側で動かします）は含まれません。
 
-## Ollamaモデル
+## AIプロバイダとモデル
 
-| 役割 | 設定項目 | デフォルトモデル | 用途 |
+| 設定 | 設定項目 | 既定値 | 用途 |
 |---|---|---|---|
-| Writer（通常） | `OLLAMA_URL` / `OLLAMA_MODEL` | `qwen3:8b` | 執筆画面・AIチャットでの手動AI支援（続きを書く、要約、校正、カスタムプロンプト） |
-| Writer（自動執筆） | ジョブごとの`writer_model`（既定値`qwen3.8:27b`） | `qwen3.8:27b` | 500話自動執筆ジョブでの本文生成。自動執筆画面でジョブごとに上書き可能 |
-| Controller | `CONTROLLER_OLLAMA_URL` / `CONTROLLER_OLLAMA_MODEL` | `qwen3:14b` | Series/Arc/Mini Arc/Episode Plannerの計画立案と、自動執筆時の事前・事後品質チェック |
-| 埋め込み | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | RAGセマンティック検索の索引生成 |
+| プロバイダ | `ai_provider`（実行時設定。環境変数ではない） | `ollama` | `/ai/generate`・`/ai/generate/stream`を処理するLLMバックエンドを選択：`ollama`／`anthropic`／`openai`／`google` |
+| Ollama | `OLLAMA_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen3.8:27b` | プロバイダが`ollama`の場合に使うローカルOllamaサーバーとモデル |
+| Anthropic Claude | 実行時設定（APIキー＋モデル名） | モデル`claude-sonnet-4-5` | プロバイダが`anthropic`の場合に使用 |
+| OpenAI | 実行時設定（APIキー＋モデル名） | モデル`gpt-4o-mini` | プロバイダが`openai`の場合に使用 |
+| Google Gemini | 実行時設定（APIキー＋モデル名） | モデル`gemini-2.0-flash` | プロバイダが`google`の場合に使用 |
+| 埋め込み | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | RAGセマンティック検索の索引生成——選択中のAIプロバイダに関わらず常にOllamaが担当 |
 
-ControllerとWriterは**同じ**Ollamaサーバー（モデル名だけ変える）でも、**別々の**Ollamaサーバー／GPUでも構いません。別マシンに分ける場合は`CONTROLLER_OLLAMA_URL`をそのマシンのアドレスに設定してください。大きめのモデル（`qwen3.8:27b`、`qwen3:14b`）を動かすには十分なVRAMを持つGPUが必要です。非力なマシンで導入する前に、Ollamaのモデル一覧でサイズを確認してください。
-
-上記のQdrant URLと両方のOllamaのURL/モデルは、アプリの設定＞接続設定画面からも実行中に変更できます（[操作マニュアル](user-guide.ja.md#接続設定)参照）。多くの場合、環境変数を編集して再起動するよりこちらの方が手軽です。
+有効なプロバイダ・APIキー・モデル名は実行時設定としてデータベースに保存され、アプリの設定＞接続設定画面（「接続テスト」ボタン付き）から再起動なしで変更できます（[操作マニュアル](user-guide.ja.md#接続設定)参照）。初期デプロイ時はOllamaのサーバーURL／モデルを`OLLAMA_URL`／`OLLAMA_MODEL`の環境変数で設定することもできます。
 
 ## ローカルディスク／GitHubへのエピソード保存
 
