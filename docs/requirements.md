@@ -29,18 +29,18 @@ Docker Desktop (Windows/macOS) or Docker Engine + the Compose plugin (Linux) bot
 
 Native installs still need Ollama and (if you want vector search) Qdrant — Docker only replaces Postgres/Qdrant/the app containers, not the LLM runtime, which almost always runs on the host to use its GPU.
 
-## Ollama models
+## AI provider and models
 
-| Role | Config | Default model | Purpose |
+| Setting | Config | Default | Purpose |
 |---|---|---|---|
-| Writer (default) | `OLLAMA_URL` / `OLLAMA_MODEL` | `qwen3:8b` | Powers the manual AI-assist actions (続きを書く, 要約, 校正, custom prompts) in the write screen and chat |
-| Writer (auto-write) | per-job `writer_model`, defaults to `qwen3.8:27b` | `qwen3.8:27b` | Generates episode prose during a 500-episode auto-write job; overridable per job in the 自動執筆 screen |
-| Controller | `CONTROLLER_OLLAMA_URL` / `CONTROLLER_OLLAMA_MODEL` | `qwen3:14b` | Series/Arc/Mini-Arc/Episode planning and the pre/post quality gates during auto-write |
-| Embeddings | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | RAG semantic search indexing |
+| Provider | `ai_provider` (runtime setting, not an env var) | `ollama` | Selects which LLM backend serves `/ai/generate` and `/ai/generate/stream`: `ollama`, `anthropic`, `openai`, or `google` |
+| Ollama | `OLLAMA_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen3.8:27b` | Local Ollama server and model, used when the provider is `ollama` |
+| Anthropic Claude | runtime setting (API key + model) | model `claude-sonnet-4-5` | Used when the provider is `anthropic` |
+| OpenAI | runtime setting (API key + model) | model `gpt-4o-mini` | Used when the provider is `openai` |
+| Google Gemini | runtime setting (API key + model) | model `gemini-2.0-flash` | Used when the provider is `google` |
+| Embeddings | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | RAG semantic search indexing — always served by Ollama regardless of the chosen AI provider |
 
-The Controller and Writer can point at the **same** Ollama server (just different model names) or at **two separate** Ollama servers/GPUs — set `CONTROLLER_OLLAMA_URL` to a second machine's address to split them. Larger models (`qwen3.8:27b`, `qwen3:14b`) need a GPU with enough VRAM to hold them; check the model's Ollama listing for its size before pulling it on modest hardware.
-
-Qdrant URL and both Ollama endpoints/models above can also be changed live from the app's 設定 > 接続設定 screen — see the [User Guide](user-guide.md#connection-settings) — which is usually more convenient than editing these env vars and restarting.
+The active provider, its API key, and model name are stored as runtime settings and can be changed — with a "接続テスト" (test connection) button — from the app's 設定 > 接続設定 screen, with no restart required; see the [User Guide](user-guide.md#connection-settings). The Ollama server URL/model can also be set via the `OLLAMA_URL`/`OLLAMA_MODEL` env vars for the initial deployment.
 
 ## Local-disk / GitHub episode storage
 
