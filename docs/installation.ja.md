@@ -71,7 +71,16 @@ docker compose up --build
 
 **任意：独自ドメイン＋HTTPS化：** 上記の構成は`:3000`/`:8000`というカスタムポートの平文HTTPで提供されるため、ローカル・LAN内利用や信頼できる小規模チームでの利用には十分ですが、公開ドメインでの運用には、[Caddy](https://caddyserver.com/)や[nginx](https://nginx.org/)などのリバースプロキシを3000番・8000番の前段に自分で用意してください（本プロジェクトには同梱していません）。Caddyのようなプロキシは、所有しているドメインのTLS証明書を自動で取得・更新してくれるため、`:3000`/`:8000`のポートを省略して`https://自分のドメイン`だけでアクセスできるようになり、APIのポート自体をインターネットに公開する必要も無くなります。その際は`CORS_ORIGINS`と`NEXT_PUBLIC_API_URL`を`https://`のドメインに更新するのを忘れないでください（プロキシが`/api`を同じドメイン上のAPIへ振り分ける構成なら、`/api/v1`のような同一オリジンの相対パスでも構いません）。ログイン時に接続エラーになる場合は、下記のトラブルシューティング表も参照してください。
 
-**任意：ポート転送の代わりにCloudflare Tunnelを使う：** ルーターの受信ポートを一切開けたくない場合（`80`/`443`/`8000`のいずれも転送不要。CGNAT配下でも動作します）、[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)を使えば、送信専用のトンネル経由でこのアプリをインターネットに公開でき、TLSはCloudflare側が処理してくれます。（無料の）Cloudflareアカウントにドメインを追加している必要があります。
+**任意：ポート転送の代わりにCloudflare Tunnelを使う：** ルーターの受信ポートを一切開けたくない場合（`80`/`443`/`8000`のいずれも転送不要。CGNAT配下でも動作します）、[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)を使えば、送信専用のトンネル経由でこのアプリをインターネットに公開でき、TLSはCloudflare側が処理してくれます。（無料の）Cloudflareアカウントにドメインを追加している必要があります。設定方法は2通りあり、どちらも結果は同じです。
+
+**ダッシュボード（推奨 — トンネルの作成・ルーティングにCLIコマンド不要）：**
+
+1. [Cloudflare Zero Trustダッシュボード](https://one.dash.cloudflare.com/)で **Networks → Tunnels**（旧UIでは **Access → Tunnels**）を開き、**Create a tunnel** をクリックします。コネクタの種類は **Cloudflared** を選択してください（これ一択です）。Cloudflareダッシュボードの別の場所にあるWorkers/Pages用の「テンプレート」ギャラリーとは無関係の、別の機能なので混同しないでください。
+2. トンネルに名前を付け、表示されるOS別のインストールコマンドに従ってDockerホストに`cloudflared`をインストール・接続します。
+3. **Public Hostname** タブで、同じドメインに対して2つのホスト名ルールを追加します：**Path**を`api/*`にしたルール（サービスは`http://localhost:8000`）と、パス指定なしのルール（サービスは`http://localhost:3000`）です。`api/*`のルールを、パス指定なしのルールより上に配置してください（Cloudflareは上から順に評価します）。
+4. `.env`を更新します：`NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1`（同一オリジンの相対パス`/api/v1`でも可）、`CORS_ORIGINS=https://your-domain.example`。反映には`docker compose up -d --build web`が必要です。
+
+**CLI（ダッシュボードよりも設定ファイルで管理したい場合）：**
 
 1. Dockerホストに`cloudflared`をインストール（または専用コンテナとして実行 — Cloudflareのドキュメント参照）し、アカウントに認証させます：`cloudflared tunnel login`。
 2. 名前付きトンネルを作成し、ドメインをそこにルーティングします：`cloudflared tunnel create ine`、続けて`cloudflared tunnel route dns ine your-domain.example`。
@@ -87,7 +96,7 @@ docker compose up --build
        service: http://localhost:3000
      - service: http_status:404
    ```
-4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、`.env`を更新します：`NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1`（同一オリジンの相対パス`/api/v1`でも可）、`CORS_ORIGINS=https://your-domain.example`。反映には`docker compose up -d --build web`が必要です。
+4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、上記手順4と同じ要領で`.env`を更新し、`docker compose up -d --build web`で反映します。
 
 どちらの方法も「1つのHTTPSドメインに集約し、APIのポートを公開しない」という同じゴールを達成します — Cloudflare Tunnelはルーター設定が一切不要な代わりに通信がCloudflare経由になり、自前のリバースプロキシは全てを自分のインフラ内に収められる代わりに証明書取得のため`80`/`443`の転送が必要です。
 
