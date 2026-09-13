@@ -45,7 +45,7 @@ RAG semantic search embeddings always use a local Ollama embedding model (`nomic
 | 8000 | API (also serves `/docs` — interactive OpenAPI UI) |
 | 5432 | PostgreSQL |
 | 6333 / 6334 | Qdrant (HTTP / gRPC) |
-| 11434 | Ollama (only if using the local LLM backend; not started by Docker Compose) |
+| 11434 | Ollama (only if using the local LLM backend; runs on the host by default, or optionally as a bundled container) |
 
 ### Browser
 

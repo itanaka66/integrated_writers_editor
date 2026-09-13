@@ -41,8 +41,10 @@ echo
 
 if [ -f .env ]; then
   echo ".env already exists — leaving it as-is. Delete it first if you want to redo setup from scratch."
-  echo "Starting the full stack (db + qdrant + api + web) using the existing .env."
-  exec docker compose -f "$COMPOSE_FILE" up --build db qdrant api web
+  SERVICES="db qdrant api web"
+  grep -q '^OLLAMA_URL=http://ollama:11434' .env && SERVICES="ollama $SERVICES"
+  echo "Starting: $SERVICES (using the existing .env)"
+  exec docker compose -f "$COMPOSE_FILE" up --build $SERVICES
 fi
 
 cp .env.example .env
@@ -71,8 +73,12 @@ fi
 echo
 
 echo "-- AI backend (Ollama) --"
-echo "Ollama always runs on the host, not in Docker — Compose never starts it."
-if ask_yn "Will you use a local Ollama running on this machine?" y; then
+if ask_yn "Run Ollama in Docker for you? (needs an NVIDIA GPU + Container Toolkit for good performance; CPU-only works but is slow for large models)" n; then
+  SERVICES="ollama $SERVICES"
+  sed -i.bak "s|^OLLAMA_URL=.*|OLLAMA_URL=http://ollama:11434|" .env && rm -f .env.bak
+  echo "Models must be pulled into the container after it starts, e.g.:"
+  echo "  docker compose exec ollama ollama pull qwen3:8b"
+elif ask_yn "Will you use a local Ollama already running on this machine?" y; then
   : # keep .env.example's default OLLAMA_URL (http://host.docker.internal:11434)
 elif ask_yn "Will you use Ollama running on a different machine?" n; then
   read -r -p "Enter its URL (e.g. http://192.168.1.10:11434): " ollama_url
