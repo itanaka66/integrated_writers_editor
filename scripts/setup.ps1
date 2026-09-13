@@ -48,8 +48,12 @@ Write-Host ""
 
 if (Test-Path .env) {
     Write-Host ".env already exists - leaving it as-is. Delete it first if you want to redo setup from scratch."
-    Write-Host "Starting the full stack (db + qdrant + api + web) using the existing .env."
-    docker compose -f $composeFile up --build db qdrant api web
+    $services = @("db", "qdrant", "api", "web")
+    if (Select-String -Path .env -Pattern '^OLLAMA_URL=http://ollama:11434' -Quiet) {
+        $services = @("ollama") + $services
+    }
+    Write-Host "Starting: $($services -join ' ') (using the existing .env)"
+    docker compose -f $composeFile up --build @services
     exit 0
 }
 
@@ -79,8 +83,12 @@ if (Ask-YesNo "Run Qdrant in Docker for you? (recommended unless you already hav
 Write-Host ""
 
 Write-Host "-- AI backend (Ollama) --"
-Write-Host "Ollama always runs on the host, not in Docker - Compose never starts it."
-if (Ask-YesNo "Will you use a local Ollama running on this machine?" "y") {
+if (Ask-YesNo "Run Ollama in Docker for you? (needs an NVIDIA GPU + Container Toolkit for good performance; CPU-only works but is slow for large models)" "n") {
+    $services = @("ollama") + $services
+    Set-EnvValue .env "OLLAMA_URL" "http://ollama:11434"
+    Write-Host "Models must be pulled into the container after it starts, e.g.:"
+    Write-Host "  docker compose exec ollama ollama pull qwen3:8b"
+} elseif (Ask-YesNo "Will you use a local Ollama already running on this machine?" "y") {
     # keep .env.example's default OLLAMA_URL (http://host.docker.internal:11434)
 } elseif (Ask-YesNo "Will you use Ollama running on a different machine?" "n") {
     $ollamaUrl = Read-Host "Enter its URL (e.g. http://192.168.1.10:11434)"

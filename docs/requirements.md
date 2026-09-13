@@ -69,7 +69,7 @@ Restoring is a manual, command-line-only step (`scripts/restore.sh`) — see [Us
 | 8000 | API (also serves `/docs` — interactive OpenAPI UI) |
 | 5432 | PostgreSQL |
 | 6333 / 6334 | Qdrant (HTTP / gRPC) |
-| 11434 | Ollama (not started by Docker Compose — runs on the host) |
+| 11434 | Ollama (runs on the host by default; optionally a bundled container instead — see the Installation Manual) |
 
 ## Browser
 

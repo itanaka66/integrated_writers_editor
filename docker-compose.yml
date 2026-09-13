@@ -23,6 +23,32 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # Optional — skip this service (scripts/setup.sh asks, or remove it and
+  # run `docker compose up db qdrant api web`) to use an Ollama instance
+  # already running on the host or another machine instead; point
+  # OLLAMA_URL at it in that case. Uncomment the `deploy:` block below if
+  # you have an NVIDIA GPU and the NVIDIA Container Toolkit installed —
+  # without it, Ollama runs on CPU only (fine for small models, slow for
+  # large ones).
+  ollama:
+    image: ollama/ollama:latest
+    # Not started by a plain `docker compose up` (no profile active by
+    # default) — Ollama runs on the host unless you opt in, matching the
+    # documented default. `docker compose up ollama ...` (what
+    # scripts/setup.sh does) or `--profile ollama` starts it anyway.
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
   api:
     build:
       context: ./apps/api

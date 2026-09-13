@@ -11,7 +11,7 @@ layout: default
 
 ## 1. Ollamaのインストールとモデルの取得
 
-Ollamaは常にホスト側で動かします（Docker Composeは起動しません）。以下のどちらの方式を選んでも、この手順は共通です。
+デフォルトではOllamaはホスト側で動かします。以下のどちらの方式を選んでも、この手順は共通です（方式Aでは、ホストに何もインストールしたくない場合向けに、Ollamaを同梱コンテナとして動かす選択肢もあります — 下記セットアップスクリプトの節を参照。クラウドAIプロバイダー（Claude/ChatGPT/Gemini）のみ使う場合はこの手順自体を省略できますが、セマンティック検索の埋め込みには依然として何らかのOllamaインスタンスが必要です）。
 
 1. https://ollama.com からOllamaをインストールします。
 2. 使う予定のモデルを取得します。
@@ -60,7 +60,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-4つのコンテナがビルド・起動します：`db`（Postgres）、`qdrant`、`api`（起動時に自動で`alembic upgrade head`を実行し、初回起動時にデモ作品を1件投入）、`web`。ログが落ち着いたら以下を開きます。
+4つのコンテナがビルド・起動します：`db`（Postgres）、`qdrant`、`api`（起動時に自動で`alembic upgrade head`を実行し、初回起動時にデモ作品を1件投入）、`web`。（5つ目の`ollama`も用意されていますが既定では起動しません — 含めるには上記のセットアップスクリプトを使うか、`docker compose up ollama db qdrant api web`としてください。）ログが落ち着いたら以下を開きます。
 
 - Webアプリ：http://localhost:3000
 - APIインタラクティブドキュメント：http://localhost:8000/docs

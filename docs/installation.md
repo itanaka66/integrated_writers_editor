@@ -11,7 +11,7 @@ See [requirements.md](requirements.md) first to confirm your machine meets the p
 
 ## 1. Install Ollama and pull the models
 
-Ollama always runs on the host (Docker Compose does not start it), so do this regardless of which option below you choose.
+By default Ollama runs on the host, not in Docker — do this regardless of which option below you choose. (Option A also offers a bundled Ollama *container* instead, if you'd rather not install anything on the host — see the setup script section below. Skip this step entirely if you only plan to use a cloud AI provider — Claude/ChatGPT/Gemini — though semantic search still needs *some* Ollama instance for embeddings.)
 
 1. Install Ollama from https://ollama.com.
 2. Pull the models you plan to use:
@@ -60,7 +60,7 @@ Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without on
 docker compose up --build
 ```
 
-This builds and starts four containers: `db` (Postgres), `qdrant`, `api` (runs `alembic upgrade head` automatically before starting, then seeds one demo project on first launch), and `web`. Wait for the logs to settle, then open:
+This builds and starts four containers: `db` (Postgres), `qdrant`, `api` (runs `alembic upgrade head` automatically before starting, then seeds one demo project on first launch), and `web`. (A fifth, `ollama`, is available but not started by default — see the setup script section above to include it, or `docker compose up ollama db qdrant api web` to add it to a plain `docker compose up`.) Wait for the logs to settle, then open:
 
 - Web app: http://localhost:3000
 - API interactive docs: http://localhost:8000/docs

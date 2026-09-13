@@ -69,7 +69,7 @@ Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン�
 | 8000 | API（`/docs`でOpenAPIのインタラクティブUIも提供） |
 | 5432 | PostgreSQL |
 | 6333 / 6334 | Qdrant（HTTP / gRPC） |
-| 11434 | Ollama（Docker Composeでは起動しません。ホスト側で起動してください） |
+| 11434 | Ollama（既定ではホスト側で起動。任意で同梱コンテナとしても起動可能 — インストールマニュアル参照） |
 
 ## ブラウザ
 
