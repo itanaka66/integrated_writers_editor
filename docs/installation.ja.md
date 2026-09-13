@@ -69,6 +69,8 @@ docker compose up --build
 
 停止：`docker compose down`。停止して**全データを削除**する場合：`docker compose down -v`。
 
+**任意：独自ドメイン＋HTTPS化：** 上記の構成は`:3000`/`:8000`というカスタムポートの平文HTTPで提供されるため、ローカル・LAN内利用や信頼できる小規模チームでの利用には十分ですが、公開ドメインでの運用には、[Caddy](https://caddyserver.com/)や[nginx](https://nginx.org/)などのリバースプロキシを3000番・8000番の前段に自分で用意してください（本プロジェクトには同梱していません）。Caddyのようなプロキシは、所有しているドメインのTLS証明書を自動で取得・更新してくれるため、`:3000`/`:8000`のポートを省略して`https://自分のドメイン`だけでアクセスできるようになり、APIのポート自体をインターネットに公開する必要も無くなります。その際は`CORS_ORIGINS`と`NEXT_PUBLIC_API_URL`を`https://`のドメインに更新するのを忘れないでください（プロキシが`/api`を同じドメイン上のAPIへ振り分ける構成なら、`/api/v1`のような同一オリジンの相対パスでも構いません）。ログイン時に接続エラーになる場合は、下記のトラブルシューティング表も参照してください。
+
 ## 2b. 方式A2 — デスクトップインストーラ（Windows / macOS）
 
 `git clone`やターミナル操作をしたくない場合は、[Releasesページ](https://github.com/itanaka66/integrated_writers_editor/releases)からインストーラをダウンロードしてください。
