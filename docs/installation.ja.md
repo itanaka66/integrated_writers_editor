@@ -112,8 +112,14 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd apps/web
 npm install
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1" > .env.local
 npm run dev
+```
+
+デフォルトの`http://localhost:8000/api/v1`以外のAPIアドレスを指定したい場合（バックエンドが別ホストにある場合など）は、`apps/web/.env.local`を作成してください。Next.jsが自動的に読み込みます：
+
+```bash
+# apps/web/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
 http://localhost:3000 を開きます。
