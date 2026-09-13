@@ -124,6 +124,15 @@ npm run dev
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
+この`npm run dev`サーバーに`localhost`以外（LAN内の別マシンなど）からアクセスする場合、Next.jsは既定でクロスオリジンの開発リクエストをブロックし、許可すべきホストをブラウザのコンソールに警告表示します。その値を同じ`.env.local`に追加してください：
+
+```bash
+# apps/web/.env.local
+NEXT_DEV_ALLOWED_ORIGINS=192.168.1.10
+```
+
+（複数指定はカンマ区切り。`next dev`にのみ影響し、`CORS_ORIGINS`やAPIとは無関係です。Dockerでのインストールや`next build`/`next start`では不要です。）
+
 http://localhost:3000 を開きます。
 
 ## 4. 初回ログイン
