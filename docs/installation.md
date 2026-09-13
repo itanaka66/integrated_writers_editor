@@ -69,6 +69,8 @@ Log in with the username `admin` and the `ADMIN_PASSWORD` you set.
 
 To stop: `docker compose down`. To stop **and delete all data** (Postgres + Qdrant volumes): `docker compose down -v`.
 
+**Optional — a real domain with HTTPS:** the setup above serves plain HTTP on custom ports (`:3000`/`:8000`), which is fine for local/LAN access or a trusted small team. For a public deployment on a real domain, put a reverse proxy such as [Caddy](https://caddyserver.com/) or [nginx](https://nginx.org/) in front of ports 3000 and 8000 yourself — this project doesn't bundle one. A proxy like Caddy issues and renews a TLS certificate automatically for a domain you own, letting you drop the `:3000`/`:8000` ports entirely and access everything over `https://your-domain`, without exposing the API's own port to the internet at all. Remember to update `CORS_ORIGINS` and `NEXT_PUBLIC_API_URL` to the `https://` domain (or a same-origin relative path like `/api/v1` if your proxy routes `/api` to the API on the same domain) once you do — see the Troubleshooting table below if login then fails with a connection error.
+
 ## 2b. Option A2 — Desktop installer (Windows / macOS)
 
 For a machine that shouldn't need `git clone` or a terminal, download the installer from the [Releases page](https://github.com/itanaka66/integrated_writers_editor/releases):
