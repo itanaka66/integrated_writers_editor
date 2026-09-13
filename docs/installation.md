@@ -71,6 +71,26 @@ To stop: `docker compose down`. To stop **and delete all data** (Postgres + Qdra
 
 **Optional — a real domain with HTTPS:** the setup above serves plain HTTP on custom ports (`:3000`/`:8000`), which is fine for local/LAN access or a trusted small team. For a public deployment on a real domain, put a reverse proxy such as [Caddy](https://caddyserver.com/) or [nginx](https://nginx.org/) in front of ports 3000 and 8000 yourself — this project doesn't bundle one. A proxy like Caddy issues and renews a TLS certificate automatically for a domain you own, letting you drop the `:3000`/`:8000` ports entirely and access everything over `https://your-domain`, without exposing the API's own port to the internet at all. Remember to update `CORS_ORIGINS` and `NEXT_PUBLIC_API_URL` to the `https://` domain (or a same-origin relative path like `/api/v1` if your proxy routes `/api` to the API on the same domain) once you do — see the Troubleshooting table below if login then fails with a connection error.
 
+**Optional — Cloudflare Tunnel instead of port forwarding:** if you don't want to open any inbound ports on your router at all (no `80`/`443`/`8000` forwarding, works even behind CGNAT), [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) can expose this app to the internet over an outbound-only tunnel, with Cloudflare handling TLS for you. Requires a domain added to a (free) Cloudflare account.
+
+1. Install `cloudflared` on the Docker host (or run it as its own container — see Cloudflare's docs) and authenticate it to your account: `cloudflared tunnel login`.
+2. Create a named tunnel and route your domain to it: `cloudflared tunnel create ine` then `cloudflared tunnel route dns ine your-domain.example`.
+3. In the tunnel's config (`~/.cloudflared/config.yml`), add **ingress rules** that route by path to each service — this puts both `web` and `api` behind the one domain, the same way a reverse proxy would, without needing one:
+   ```yaml
+   tunnel: <tunnel-id>
+   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   ingress:
+     - hostname: your-domain.example
+       path: ^/api/.*
+       service: http://localhost:8000
+     - hostname: your-domain.example
+       service: http://localhost:3000
+     - service: http_status:404
+   ```
+4. Run it (`cloudflared tunnel run ine`, or install it as a system service per Cloudflare's docs) and update `.env`: `NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1` (or the same-origin relative `/api/v1`) and `CORS_ORIGINS=https://your-domain.example`, then `docker compose up -d --build web` to apply.
+
+Either this or a self-hosted reverse proxy accomplish the same goal (one HTTPS domain, no exposed API port) — Cloudflare Tunnel avoids router configuration entirely at the cost of routing your traffic through Cloudflare; a self-hosted proxy keeps everything on your own infrastructure but needs `80`/`443` forwarded for certificate issuance.
+
 ## 2b. Option A2 — Desktop installer (Windows / macOS)
 
 For a machine that shouldn't need `git clone` or a terminal, download the installer from the [Releases page](https://github.com/itanaka66/integrated_writers_editor/releases):
