@@ -71,6 +71,26 @@ docker compose up --build
 
 **任意：独自ドメイン＋HTTPS化：** 上記の構成は`:3000`/`:8000`というカスタムポートの平文HTTPで提供されるため、ローカル・LAN内利用や信頼できる小規模チームでの利用には十分ですが、公開ドメインでの運用には、[Caddy](https://caddyserver.com/)や[nginx](https://nginx.org/)などのリバースプロキシを3000番・8000番の前段に自分で用意してください（本プロジェクトには同梱していません）。Caddyのようなプロキシは、所有しているドメインのTLS証明書を自動で取得・更新してくれるため、`:3000`/`:8000`のポートを省略して`https://自分のドメイン`だけでアクセスできるようになり、APIのポート自体をインターネットに公開する必要も無くなります。その際は`CORS_ORIGINS`と`NEXT_PUBLIC_API_URL`を`https://`のドメインに更新するのを忘れないでください（プロキシが`/api`を同じドメイン上のAPIへ振り分ける構成なら、`/api/v1`のような同一オリジンの相対パスでも構いません）。ログイン時に接続エラーになる場合は、下記のトラブルシューティング表も参照してください。
 
+**任意：ポート転送の代わりにCloudflare Tunnelを使う：** ルーターの受信ポートを一切開けたくない場合（`80`/`443`/`8000`のいずれも転送不要。CGNAT配下でも動作します）、[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)を使えば、送信専用のトンネル経由でこのアプリをインターネットに公開でき、TLSはCloudflare側が処理してくれます。（無料の）Cloudflareアカウントにドメインを追加している必要があります。
+
+1. Dockerホストに`cloudflared`をインストール（または専用コンテナとして実行 — Cloudflareのドキュメント参照）し、アカウントに認証させます：`cloudflared tunnel login`。
+2. 名前付きトンネルを作成し、ドメインをそこにルーティングします：`cloudflared tunnel create ine`、続けて`cloudflared tunnel route dns ine your-domain.example`。
+3. トンネルの設定ファイル（`~/.cloudflared/config.yml`）に、パスごとに各サービスへ振り分ける**ingressルール**を追加します。これにより、リバースプロキシを立てなくても`web`と`api`の両方を同じドメインの配下に置けます：
+   ```yaml
+   tunnel: <tunnel-id>
+   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   ingress:
+     - hostname: your-domain.example
+       path: ^/api/.*
+       service: http://localhost:8000
+     - hostname: your-domain.example
+       service: http://localhost:3000
+     - service: http_status:404
+   ```
+4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、`.env`を更新します：`NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1`（同一オリジンの相対パス`/api/v1`でも可）、`CORS_ORIGINS=https://your-domain.example`。反映には`docker compose up -d --build web`が必要です。
+
+どちらの方法も「1つのHTTPSドメインに集約し、APIのポートを公開しない」という同じゴールを達成します — Cloudflare Tunnelはルーター設定が一切不要な代わりに通信がCloudflare経由になり、自前のリバースプロキシは全てを自分のインフラ内に収められる代わりに証明書取得のため`80`/`443`の転送が必要です。
+
 ## 2b. 方式A2 — デスクトップインストーラ（Windows / macOS）
 
 `git clone`やターミナル操作をしたくない場合は、[Releasesページ](https://github.com/itanaka66/integrated_writers_editor/releases)からインストーラをダウンロードしてください。
