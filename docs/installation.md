@@ -124,6 +124,15 @@ Next.js reads `apps/web/.env.local` automatically if you need to point at an API
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
+Accessing this `npm run dev` server from another machine on your LAN (not just `localhost`)? Next.js blocks cross-origin dev requests by default and will warn in the browser console with the exact host to allow — add it to the same `.env.local`:
+
+```bash
+# apps/web/.env.local
+NEXT_DEV_ALLOWED_ORIGINS=192.168.1.10
+```
+
+(Comma-separated for multiple origins. Only affects `next dev`; unrelated to `CORS_ORIGINS`/the API, and not needed at all for the Docker install or `next build`/`next start`.)
+
 Open http://localhost:3000.
 
 ## 4. First login
