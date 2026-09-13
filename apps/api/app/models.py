@@ -108,4 +108,5 @@ class RuntimeConfig(Base):
     openai_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     google_api_key:Mapped[str|None]=mapped_column(String(300),nullable=True)
     google_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    cors_origins:Mapped[str|None]=mapped_column(String(1000),nullable=True)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)

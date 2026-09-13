@@ -24,6 +24,7 @@ const systemSettings = {
   anthropic_api_key_is_set: false, anthropic_model: "claude-sonnet-4-5",
   openai_api_key_is_set: false, openai_model: "gpt-4o-mini",
   google_api_key_is_set: false, google_model: "gemini-2.0-flash",
+  cors_origins: "http://localhost:3000", cors_origins_is_override: false,
 };
 
 describe("SettingsPanel AI provider section", () => {
