@@ -89,6 +89,7 @@ class SystemSettingsOut(BaseModel):
     anthropic_api_key_is_set:bool; anthropic_model:str
     openai_api_key_is_set:bool; openai_model:str
     google_api_key_is_set:bool; google_model:str
+    cors_origins:str; cors_origins_is_override:bool
     updated_at:object|None=None
 
 class TextSearchMatch(BaseModel):
@@ -125,3 +126,4 @@ class SystemSettingsUpdate(BaseModel):
     openai_model:str|None=None
     google_api_key:str|None=None
     google_model:str|None=None
+    cors_origins:str|None=None

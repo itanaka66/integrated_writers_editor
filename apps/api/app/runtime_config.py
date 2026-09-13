@@ -30,6 +30,7 @@ class EffectiveConfig:
     openai_model: str = ''
     google_api_key: str = ''
     google_model: str = ''
+    cors_origins: str = ''
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -66,7 +67,42 @@ def get_effective_config(db=None) -> EffectiveConfig:
         openai_model=_pick(row.openai_model if row else None, env_settings.openai_model),
         google_api_key=_pick(row.google_api_key if row else None, env_settings.google_api_key),
         google_model=_pick(row.google_model if row else None, env_settings.google_model),
+        cors_origins=_pick(row.cors_origins if row else None, env_settings.cors_origins),
     )
+
+
+def _parse_origins(raw: str) -> list[str]:
+    # A trailing slash is an easy, easy-to-miss mistake when typing an
+    # origin into the Settings screen or .env (e.g. "https://example.com/"
+    # instead of "https://example.com") — the browser's Origin header never
+    # has one, so an un-normalized value would silently never match and
+    # every request would look like a CORS failure with no obvious cause.
+    return [o.strip().rstrip('/') for o in raw.split(',') if o.strip()]
+
+
+# CORSMiddleware (see app/cors.py) checks the allowed-origins list on every
+# request, so it reads this in-memory cache rather than hitting the database
+# each time — refreshed at app startup and whenever the Settings screen
+# changes the CORS_ORIGINS override (system_settings_put in main.py).
+_cors_cache: list[str] | None = None
+
+
+def refresh_cors_cache(db=None) -> list[str]:
+    global _cors_cache
+    cfg = get_effective_config(db)
+    _cors_cache = _parse_origins(cfg.cors_origins)
+    return _cors_cache
+
+
+def get_cors_origins() -> list[str]:
+    # Falls back to the env var directly, without touching the database, if
+    # the cache was never primed (startup's refresh_cors_cache() failed or
+    # hasn't run yet, e.g. in tests) — CORS must keep working even when the
+    # database is briefly unreachable, since it's unrelated to this app's
+    # actual data.
+    if _cors_cache is None:
+        return _parse_origins(env_settings.cors_origins)
+    return _cors_cache
 
 
 def mask_database_url(url: str) -> str:
