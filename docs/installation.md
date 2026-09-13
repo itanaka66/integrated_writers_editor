@@ -91,12 +91,13 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt   # or requirements.txt if you don't need the test suite
 ```
 
-Set environment variables (or create a `.env` your shell sources) pointing at a running Postgres and Qdrant instance — see [requirements.md](requirements.md) for the full list; at minimum:
+Create `apps/api/.env` pointing at a running Postgres and Qdrant instance — the app reads it automatically on startup (no need to `export` anything or have your shell source it) — see [requirements.md](requirements.md) for the full list of variables; at minimum:
 
 ```bash
-export DATABASE_URL=postgresql+psycopg2://writers:writers@localhost:5432/writers
-export QDRANT_URL=http://localhost:6333
-export ADMIN_PASSWORD=change-me
+# apps/api/.env
+DATABASE_URL=postgresql+psycopg2://writers:writers@localhost:5432/writers
+QDRANT_URL=http://localhost:6333
+ADMIN_PASSWORD=change-me
 ```
 
 Run migrations, then start the server:

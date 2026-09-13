@@ -91,12 +91,13 @@ source .venv/bin/activate   # Windowsの場合: .venv\Scripts\activate
 pip install -r requirements-dev.txt   # テストが不要ならrequirements.txtでも可
 ```
 
-起動中のPostgres・Qdrantを指す環境変数を設定します（シェルが読み込む`.env`を作っても構いません。全項目は[requirements.ja.md](requirements.ja.md)参照）。最低限：
+起動中のPostgres・Qdrantを指す`apps/api/.env`を作成します（アプリが起動時に自動で読み込むので、`export`やシェル側での読み込み設定は不要です。全項目は[requirements.ja.md](requirements.ja.md)参照）。最低限：
 
 ```bash
-export DATABASE_URL=postgresql+psycopg2://writers:writers@localhost:5432/writers
-export QDRANT_URL=http://localhost:6333
-export ADMIN_PASSWORD=change-me
+# apps/api/.env
+DATABASE_URL=postgresql+psycopg2://writers:writers@localhost:5432/writers
+QDRANT_URL=http://localhost:6333
+ADMIN_PASSWORD=change-me
 ```
 
 マイグレーションを実行してからサーバーを起動します。
