@@ -117,12 +117,19 @@ npm install
 npm run dev
 ```
 
-Next.js reads `apps/web/.env.local` automatically if you need to point at an API address other than the default `http://localhost:8000/api/v1` (e.g. the backend is on a different host):
+Set `NEXT_PUBLIC_API_URL` if you need to point at an API address other than the default `http://localhost:8000/api/v1` (e.g. the backend is on a different host):
 
 ```bash
-# apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run dev
 ```
+
+Accessing this `npm run dev` server from another machine on your LAN (not just `localhost`)? Next.js blocks cross-origin dev requests by default and will warn in the browser console with the exact host to allow — set `NEXT_DEV_ALLOWED_ORIGINS` the same way (comma-separated for multiple origins):
+
+```bash
+NEXT_DEV_ALLOWED_ORIGINS=writer.example.com,192.168.1.10 npm run dev
+```
+
+(Only affects `next dev`; unrelated to `CORS_ORIGINS`/the API, and not needed at all for the Docker install or `next build`/`next start`. On Windows PowerShell, set each with `$env:NAME = "value"` on its own line first instead of the inline `VAR=value command` syntax above, which is bash/POSIX-only.)
 
 Open http://localhost:3000.
 
