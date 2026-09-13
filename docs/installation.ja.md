@@ -114,26 +114,17 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd apps/web
 npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1" > .env.local
 npm run dev
 ```
 
-デフォルトの`http://localhost:8000/api/v1`以外のAPIアドレスを指定したい場合（バックエンドが別ホストにある場合など）は、`apps/web/.env.local`を作成してください。Next.jsが自動的に読み込みます：
-
-```bash
-# apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-```
-
-この`npm run dev`サーバーに`localhost`以外（LAN内の別マシンなど）からアクセスする場合、Next.jsは既定でクロスオリジンの開発リクエストをブロックし、許可すべきホストをブラウザのコンソールに警告表示します。その値を同じ`.env.local`に追加してください：
-
-```bash
-# apps/web/.env.local
-NEXT_DEV_ALLOWED_ORIGINS=192.168.1.10
-```
-
-（複数指定はカンマ区切り。`next dev`にのみ影響し、`CORS_ORIGINS`やAPIとは無関係です。Dockerでのインストールや`next build`/`next start`では不要です。）
-
 http://localhost:3000 を開きます。
+
+この開発サーバー（`npm run dev`。本番ビルドではない）に`localhost`以外（LAN内のIP、リバースプロキシ経由の独自ドメインなど）でアクセスすると、Next.jsが警告を出し、開発用のアセット（HMR/websocket。`CORS_ORIGINS`やAPIとは無関係）へのアクセスをブロックします。起動前に`NEXT_DEV_ALLOWED_ORIGINS`を設定すると許可できます：
+
+```bash
+NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
+```
 
 ## 4. 初回ログイン
 
