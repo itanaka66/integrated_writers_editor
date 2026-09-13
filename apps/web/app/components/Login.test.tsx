@@ -40,6 +40,20 @@ describe("Login", () => {
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
+  it("shows a connection error, not a credentials error, when the failure isn't a 401", async () => {
+    vi.mocked(api).mockRejectedValue(new TypeError("Failed to fetch"));
+    const onLoggedIn = vi.fn();
+    render(<Login onLoggedIn={onLoggedIn} />);
+
+    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "writers" } });
+    fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
+
+    await waitFor(() => expect(screen.getByText(/APIに接続できませんでした/)).toBeInTheDocument());
+    expect(screen.queryByText("ユーザー名またはパスワードが違います。")).not.toBeInTheDocument();
+    expect(onLoggedIn).not.toHaveBeenCalled();
+  });
+
   it("disables the OAuth buttons since there is no OAuth integration", () => {
     render(<Login onLoggedIn={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
