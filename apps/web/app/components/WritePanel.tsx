@@ -276,7 +276,7 @@ export default function WritePanel({ project }: { project: Project }) {
             <button className="historyButton" onClick={() => setShowSources((v) => !v)}>📚 出典（{sources.length}）</button>
             <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
             <button className="historyButton" onClick={() => setShowChecklist(true)}>✅ 公開前チェック</button>
-            <button onClick={save}>{busy ? "保存中" : "保存"}</button>
+            <button className="writeSaveButton" onClick={save}>{busy ? "保存中" : "保存"}</button>
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
