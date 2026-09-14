@@ -21,7 +21,7 @@ Docker Desktop (Windows/macOS) or Docker Engine + the Compose plugin (Linux) bot
 
 | Component | Requirement |
 |---|---|
-| Backend (`apps/api`) | Python 3.13 |
+| Backend (`apps/api`) | Python 3.13, Git (`pip install` fetches the `editor-common` dependency directly from GitHub) |
 | Frontend (`apps/web`) | Node.js 22, npm |
 | Database | PostgreSQL 17 |
 | Vector store | Qdrant (any recent version — used for semantic search) |
@@ -123,3 +123,7 @@ Ollama calls (`generate`/`embed`) retry transient network failures up to 3 times
 - Cloud provider API keys (Anthropic/OpenAI/Google) are only configurable at runtime via the Settings UI, not via `.env`/Docker Compose env vars.
 
 Contributions and issue reports are welcome via this repository's issue tracker.
+
+## License
+
+Copyright © 2026 agNedia Inc. (株式会社エージーネディア). Licensed under the [GNU Lesser General Public License v2.1](LICENSE).
