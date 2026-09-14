@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from editor_common.users import UserMixin
 from .db import Base
 
 class Project(Base):
@@ -110,3 +111,8 @@ class RuntimeConfig(Base):
     google_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     cors_origins:Mapped[str|None]=mapped_column(String(1000),nullable=True)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
+
+class User(Base, UserMixin):
+    """Login account for HTTP Basic Auth (see app/auth.py). Multiple rows
+    replace the old single ADMIN_USERNAME/ADMIN_PASSWORD pair."""
+    __tablename__='users'

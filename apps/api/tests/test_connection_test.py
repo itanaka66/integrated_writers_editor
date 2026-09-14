@@ -1,3 +1,5 @@
+from editor_common import connection_test as common_connection_test
+
 from app import connection_test
 
 
@@ -42,7 +44,7 @@ def test_ollama_reports_model_missing(monkeypatch):
     def fake_get(url, timeout):
         return _FakeResponse()
 
-    monkeypatch.setattr(connection_test.httpx, "get", fake_get)
+    monkeypatch.setattr(common_connection_test.httpx, "get", fake_get)
     ok, msg, ms = connection_test.test_ollama("http://ollama:11434", "missing-model")
     assert ok is True  # connection itself succeeded
     assert "見つかりません" in msg
@@ -59,7 +61,7 @@ def test_ollama_reports_model_present(monkeypatch):
     def fake_get(url, timeout):
         return _FakeResponse()
 
-    monkeypatch.setattr(connection_test.httpx, "get", fake_get)
+    monkeypatch.setattr(common_connection_test.httpx, "get", fake_get)
     ok, msg, ms = connection_test.test_ollama("http://ollama:11434", "qwen3:8b")
     assert ok is True
     assert "成功" in msg

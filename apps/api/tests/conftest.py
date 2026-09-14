@@ -8,6 +8,8 @@ from app.config import settings
 from app.db import Base, get_db
 from app.main import app
 from app import auth as auth_module
+from app.models import User
+from editor_common.users import create_user
 
 
 @pytest.fixture(autouse=True)
@@ -20,13 +22,13 @@ def isolate_writers_storage_dir(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_login_rate_limit():
-    # The brute-force guard in app.auth keeps its failure counts in a
-    # module-level dict, keyed by client IP — Starlette's TestClient always
-    # reports the same IP ("testclient"), so failures from one test would
-    # otherwise bleed into the next and make unrelated tests flaky.
-    auth_module._failures.clear()
+    # The brute-force guard in editor_common.auth keeps its failure counts
+    # in a module-level dict, keyed by client IP — Starlette's TestClient
+    # always reports the same IP ("testclient"), so failures from one test
+    # would otherwise bleed into the next and make unrelated tests flaky.
+    auth_module.BasicAuthMiddleware.reset_rate_limit()
     yield
-    auth_module._failures.clear()
+    auth_module.BasicAuthMiddleware.reset_rate_limit()
 
 
 @pytest.fixture()
@@ -43,13 +45,22 @@ def db_session_factory():
 
 
 @pytest.fixture()
-def client(db_session_factory):
+def client(db_session_factory, monkeypatch):
     def override_get_db():
         db = db_session_factory()
         try:
             yield db
         finally:
             db.close()
+
+    # HTTP Basic Auth now checks a User row instead of a fixed
+    # ADMIN_USERNAME/ADMIN_PASSWORD pair (see app/auth.py) — point it at
+    # this test's isolated in-memory database and seed the one account the
+    # test client authenticates as.
+    monkeypatch.setattr(auth_module, "_session_factory", db_session_factory)
+    seed_db = db_session_factory()
+    create_user(seed_db, User, settings.admin_username, settings.admin_password, is_admin=True)
+    seed_db.close()
 
     # Note: TestClient only runs FastAPI's startup/shutdown events when used
     # as a context manager. We deliberately avoid that here, since the app's

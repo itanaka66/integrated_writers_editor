@@ -1,3 +1,4 @@
+editor-common @ git+https://github.com/itanaka66/editor-common-module.git@main
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 sqlalchemy==2.0.43

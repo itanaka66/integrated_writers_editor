@@ -24,6 +24,7 @@ from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
 from . import materials
+from editor_common.users import ensure_bootstrap_user
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='writers-studio-change-me':
@@ -57,6 +58,12 @@ def init():
  except Exception:
   logger.warning('Could not read the CORS_ORIGINS override from the database at startup; falling back to the environment-variable value until the Settings screen is saved.')
  with SessionLocal() as d:
+  # Multi-user login (see app/auth.py) checks a User table instead of a
+  # single fixed ADMIN_USERNAME/ADMIN_PASSWORD pair — on a fresh database
+  # with no accounts yet, create one from those settings so a new
+  # deployment isn't locked out before anyone has run a user-management
+  # command. No-op once at least one account exists.
+  ensure_bootstrap_user(d,User,settings.admin_username,settings.admin_password)
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='記事作成 DEMO',description='サンプル記事プロジェクト');d.add(p);d.flush()
    d.add_all([Episode(project_id=p.id,number=1,title='はじめに',summary='サンプル記事',content='これはサンプル記事の本文です。'),Episode(project_id=p.id,number=2,title='2本目の記事',summary='サンプル記事',content='ここに本文を書きます。')]);d.commit()
