@@ -98,6 +98,43 @@ def project(pid:int,db:Session=Depends(get_db)):
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
 @app.put('/api/v1/projects/{pid}',response_model=ProjectOut)
 def project_put(pid:int,x:ProjectUpdate,db:Session=Depends(get_db)):return crud_update(db,Project,pid,x,'Project')
+@app.post('/api/v1/projects/{pid}/style-guide/generate',response_model=StyleGuideOut)
+async def style_guide_generate(pid:int,db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ sample='\n\n'.join(e.content for e in eps[:5] if e.content).strip()[:6000]
+ prompt=f'''あなたは日本語の編集者です。以下は記事プロジェクト「{p.name}」の既存本文サンプルです。この文章の文体・表記に沿ったスタイルガイドを、次の観点を含めて箇条書きで作成してください：文体（である調/ですます調）、語彙・言い回しの傾向、句読点の使い方、表記ゆれ（漢字/ひらがな/カタカナの使い分けなど）、避けるべき表現。スタイルガイド本文のみを出力し、前置きや締めの言葉は不要です。
+
+本文サンプル:
+{sample or "（まだ本文がありません。一般的で読みやすい日本語のスタイルガイドを提案してください。）"}'''
+ try:t,m=await generate(prompt,pid)
+ except ProviderError as ex:raise HTTPException(400,str(ex))
+ except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
+ return StyleGuideOut(style_guide=t.strip())
+@app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
+async def episode_proofread(eid:int,db:Session=Depends(get_db)):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ p=db.get(Project,e.project_id)
+ if not (p.style_guide or '').strip():raise HTTPException(400,'スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。')
+ prompt=f'''あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。
+
+スタイルガイド:
+{p.style_guide}
+
+本文:
+{e.content}
+
+出力は必ず次のJSON配列のみとし、他の説明文は一切含めないでください。修正不要なら空配列 [] を返してください。
+[{{"original": "本文中に完全一致する修正対象の原文", "suggested": "修正後の文字列", "reason": "修正理由（簡潔に）"}}]'''
+ try:t,m=await generate(prompt,e.project_id)
+ except ProviderError as ex:raise HTTPException(400,str(ex))
+ except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
+ match=re.search(r'\[.*\]',t,re.DOTALL)
+ try:raw=json.loads(match.group(0) if match else t)
+ except Exception:raw=[]
+ diffs=[ProofreadDiff(original=d.get('original',''),suggested=d.get('suggested',''),reason=d.get('reason',''))
+        for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in e.content]
+ return ProofreadResult(diffs=diffs)
 def content_disposition(filename,ext):
  # filename=... must be latin-1 (the title is almost always non-ASCII
  # Japanese), so give ASCII-only clients a safe fallback name and encode

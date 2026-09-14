@@ -12,7 +12,7 @@ vi.mock("../lib/api", () => ({
   streamSSE: vi.fn(),
 }));
 
-const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "" };
+const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "", style_guide: "" };
 const episode = { id: 10, project_id: 1, number: 1, title: "第一記事", summary: "", content: "本文", updated_at: "" };
 
 // Simulates the backend's SSE stream by immediately delivering the given
@@ -89,5 +89,37 @@ describe("WritePanel", () => {
     fireEvent.click(screen.getByText("＋ 出典を追加"));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/sources`, expect.objectContaining({ title: "参考記事" })));
+  });
+
+  it("walks through proofread diffs one at a time and applies the accepted ones", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockImplementation((path: string) => {
+      if (path.includes("/proofread")) {
+        return Promise.resolve({
+          diffs: [
+            { original: "本文", suggested: "改訂後の本文", reason: "である調に統一" },
+            { original: "見つからない文字列", suggested: "x", reason: "適用されないはず" },
+          ],
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📐 文章校正"));
+
+    await waitFor(() => expect(screen.getByText("1 / 2件")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("OKで次に進む"));
+
+    await waitFor(() => expect(screen.getByText("2 / 2件")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("スキップで次に進む"));
+
+    await waitFor(() => expect(screen.queryByText("文章校正")).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue("改訂後の本文")).toBeInTheDocument();
   });
 });
