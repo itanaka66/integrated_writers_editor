@@ -8,7 +8,6 @@ export default function NewProjectForm({ onCreated, onCancel }: { onCreated: (p:
   const [genre, setGenre] = useState("");
   const [description, setDescription] = useState("");
   const [rules, setRules] = useState("");
-  const [episodeGoal, setEpisodeGoal] = useState(500);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -17,7 +16,7 @@ export default function NewProjectForm({ onCreated, onCancel }: { onCreated: (p:
     setBusy(true);
     setError("");
     try {
-      const p = await post("/projects", { name, genre, description, rules, episode_goal: episodeGoal });
+      const p = await post("/projects", { name, genre, description, rules });
       onCreated(p);
     } catch {
       setError("プロジェクトの作成に失敗しました。APIに接続できませんでした。");
@@ -32,7 +31,6 @@ export default function NewProjectForm({ onCreated, onCancel }: { onCreated: (p:
         <label>カテゴリ<input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="技術・ライフスタイルなど" /></label>
         <label>説明<textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="プロジェクトの説明を入力してください。" /></label>
         <label>執筆メモ（任意）<textarea value={rules} onChange={(e) => setRules(e.target.value)} placeholder="文体・想定読者など" /></label>
-        <label>目標記事数<input type="number" value={episodeGoal} min={1} onChange={(e) => setEpisodeGoal(Number(e.target.value))} /></label>
         {error && <div className="loginError">{error}</div>}
         <div className="modalActions">
           <button onClick={onCancel}>キャンセル</button>

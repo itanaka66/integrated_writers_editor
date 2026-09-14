@@ -17,13 +17,13 @@ The "Googleでログイン" / "GitHubでログイン" buttons are visible but di
 
 ## Dashboard
 
-Lists all projects as cards, each showing genre and a progress bar (episodes written ÷ that project's episode target). The panel on the right shows detailed stats — episode count, open continuity issues, and an overall health score — for your most recently created project. Click a card to open that project. "＋ 新規作品作成" opens the new-project form.
+Lists all projects as cards, each showing genre and article count. The panel on the right shows detailed stats — episode count, open continuity issues, and an overall health score — for your most recently created project. Click a card to open that project. "＋ 新規作品作成" opens the new-project form.
 
 *The "AI利用状況" (AI usage) stat mentioned in early design sketches is not implemented — nothing tracks token/request usage yet.*
 
 ## Creating a project
 
-Fields: name (required), genre, synopsis (あらすじ), free-text "rules" (詳細設定 — anything you want the AI to always respect: tone, audience, hard constraints), and a target episode count (episode_goal, default 500). All of these except the target count map directly to a `Project` record and can be edited later from Settings.
+Fields: name (required), genre, synopsis (あらすじ), free-text "rules" (詳細設定 — anything you want the AI to always respect: tone, audience, hard constraints). All of these map directly to a `Project` record and can be edited later from Settings.
 
 ## Project Home
 

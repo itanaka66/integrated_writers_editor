@@ -52,7 +52,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [importBusy, setImportBusy] = useState(false);
   const importTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500, style_guide: project.style_guide });
+  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, style_guide: project.style_guide });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [styleGuideBusy, setStyleGuideBusy] = useState(false);
@@ -245,7 +245,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         <div className="entityForm" style={{ marginTop: 14 }}>
           <label>作品名<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
           <label>ジャンル<input value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })} /></label>
-          <label>総話数目標<input type="number" value={form.episode_goal} onChange={(e) => setForm({ ...form, episode_goal: Number(e.target.value) })} /></label>
           <label>あらすじ<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label>作品ルール（詳細設定）<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
           <label style={{ gridColumn: "1/-1" }}>
