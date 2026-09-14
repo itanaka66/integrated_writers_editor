@@ -21,7 +21,7 @@ Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン�
 
 | コンポーネント | 要件 |
 |---|---|
-| バックエンド（`apps/api`） | Python 3.13 |
+| バックエンド（`apps/api`） | Python 3.13、Git（`pip install`がGitHubから`editor-common`依存関係を直接取得するため） |
 | フロントエンド（`apps/web`） | Node.js 22、npm |
 | データベース | PostgreSQL 17（15/16でもおそらく動作しますが、動作確認済みは17です） |
 | ベクトルストア | Qdrant（比較的新しいバージョンであればOK。HTTP API経由で利用） |

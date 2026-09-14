@@ -21,7 +21,7 @@ Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン�
 
 | コンポーネント | 要件 |
 |---|---|
-| バックエンド（`apps/api`） | Python 3.13 |
+| バックエンド（`apps/api`） | Python 3.13、Git（`pip install`がGitHubから`editor-common`依存関係を直接取得するため） |
 | フロントエンド（`apps/web`） | Node.js 22、npm |
 | データベース | PostgreSQL 17 |
 | ベクトルストア | Qdrant（比較的新しいバージョンであればOK。セマンティック検索に使用） |
@@ -123,3 +123,7 @@ Ollama呼び出し（`generate`/`embed`）は、一時的なネットワーク�
 - クラウドプロバイダ（Anthropic/OpenAI/Google）のAPIキーは設定画面からの実行時設定のみに対応しており、`.env`／Docker Composeの環境変数では設定できません。
 
 不具合報告・改善提案は、本リポジトリのIssueにてお願いします。
+
+## ライセンス
+
+Copyright © 2026 株式会社エージーネディア (agNedia Inc.). [GNU Lesser General Public License v2.1](LICENSE)の下で公開されています。
