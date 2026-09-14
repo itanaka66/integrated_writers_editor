@@ -4,8 +4,11 @@ WORKDIR /app
 
 # postgresql-client provides pg_dump, used by app/backup.py's scheduled and
 # on-demand database backups (runs against the `db` service over the
-# network, so only the client — not the server — is needed here).
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+# network, so only the client — not the server — is needed here). git is
+# required by pip to install requirements.txt's editor-common dependency,
+# a git+https VCS requirement (see that file) — pip cannot fetch it
+# without the git binary on PATH.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client git \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

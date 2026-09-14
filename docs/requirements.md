@@ -21,7 +21,7 @@ Docker Desktop (Windows/macOS) or Docker Engine + the Compose plugin (Linux) bot
 
 | Component | Requirement |
 |---|---|
-| Backend (`apps/api`) | Python 3.13 |
+| Backend (`apps/api`) | Python 3.13, Git (`pip install` fetches the `editor-common` dependency directly from GitHub) |
 | Frontend (`apps/web`) | Node.js 22, npm |
 | Database | PostgreSQL 17 (a newer 15/16 will likely work too, but 17 is what's tested) |
 | Vector store | Qdrant (any recent version; used via its HTTP API) |
