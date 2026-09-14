@@ -6,7 +6,7 @@ from .db import Base
 
 class Project(Base):
     __tablename__='projects'
-    id:Mapped[int]=mapped_column(primary_key=True); name:Mapped[str]=mapped_column(String(200)); description:Mapped[str]=mapped_column(Text,default=''); genre:Mapped[str]=mapped_column(String(100),default=''); rules:Mapped[str]=mapped_column(Text,default=''); episode_goal:Mapped[int]=mapped_column(Integer,default=500); style_guide:Mapped[str]=mapped_column(Text,default='')
+    id:Mapped[int]=mapped_column(primary_key=True); name:Mapped[str]=mapped_column(String(200)); description:Mapped[str]=mapped_column(Text,default=''); genre:Mapped[str]=mapped_column(String(100),default=''); rules:Mapped[str]=mapped_column(Text,default=''); style_guide:Mapped[str]=mapped_column(Text,default='')
     episodes=relationship('Episode',back_populates='project',cascade='all, delete-orphan')
 class Episode(Base):
     __tablename__='episodes'

@@ -52,14 +52,11 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
           <small>マイプロジェクト</small>
           {projects.length === 0 && !busy && <div className="card"><b>まだプロジェクトがありません</b><p>「新規プロジェクト作成」から最初のプロジェクトを作りましょう。</p></div>}
           {projects.map((p) => {
-            const goal = p.episode_goal || 500;
             const eps = counts[p.id] ?? 0;
-            const pct = Math.min(100, Math.round((eps / goal) * 100));
             return (
               <div className="workCard" key={p.id} onClick={() => onOpen(p)}>
                 <div className="workCardHead"><b>{p.name}</b></div>
-                <div className="progress"><i style={{ width: `${pct}%` }} /></div>
-                <div className="workCardFoot"><span>進捗 {pct}%</span><span>({eps}/{goal}記事)</span></div>
+                <div className="workCardFoot"><span>{eps}記事</span></div>
               </div>
             );
           })}
