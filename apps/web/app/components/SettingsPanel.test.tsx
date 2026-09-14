@@ -12,7 +12,7 @@ vi.mock("../lib/api", () => ({
   downloadFile: vi.fn(),
 }));
 
-const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "", episode_goal: 500 };
+const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "", episode_goal: 500, style_guide: "" };
 
 const systemSettings = {
   database_url_masked: "writers:***@db:5432/writers",

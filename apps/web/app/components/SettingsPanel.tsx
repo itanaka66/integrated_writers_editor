@@ -52,9 +52,10 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [importBusy, setImportBusy] = useState(false);
   const importTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500 });
+  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500, style_guide: project.style_guide });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [styleGuideBusy, setStyleGuideBusy] = useState(false);
   const [sys, setSys] = useState<SystemSettings | null>(null);
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
@@ -220,6 +221,14 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     } finally { setBusy(false); }
   }
 
+  async function generateStyleGuide() {
+    setStyleGuideBusy(true);
+    try {
+      const { style_guide }: { style_guide: string } = await post(`/projects/${project.id}/style-guide/generate`, {});
+      setForm((f) => ({ ...f, style_guide }));
+    } finally { setStyleGuideBusy(false); }
+  }
+
   return (
     <div className="panel">
       <small>SETTINGS</small>
@@ -239,6 +248,16 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
           <label>総話数目標<input type="number" value={form.episode_goal} onChange={(e) => setForm({ ...form, episode_goal: Number(e.target.value) })} /></label>
           <label>あらすじ<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label>作品ルール（詳細設定）<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
+          <label style={{ gridColumn: "1/-1" }}>
+            スタイルガイド
+            <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder="「スタイルガイド生成」で作成するか、直接入力してください。" style={{ minHeight: 120 }} />
+          </label>
+          <div style={{ gridColumn: "1/-1" }}>
+            <button type="button" onClick={generateStyleGuide} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "📐 スタイルガイド生成"}</button>
+          </div>
+          <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
+            既存の本文サンプルから、文体・表記の傾向を分析してスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。
+          </p>
           <div className="entityFormActions">
             <button onClick={save} disabled={busy}>{busy ? "保存中..." : "保存"}</button>
             {saved && <span className="savedNote">保存しました</span>}

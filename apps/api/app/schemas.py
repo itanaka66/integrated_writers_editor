@@ -1,7 +1,10 @@
 from pydantic import BaseModel,ConfigDict
-class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500
+class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500; style_guide:str=''
 class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes=True)
-class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None
+class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None
+class StyleGuideOut(BaseModel): style_guide:str
+class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''
+class ProofreadResult(BaseModel): diffs:list[ProofreadDiff]
 class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None

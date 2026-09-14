@@ -5,6 +5,7 @@ import { api, post, put, del, streamSSE } from "../lib/api";
 import { Episode, Project, Source, Template } from "../lib/types";
 import { useVoiceInput } from "../lib/useVoiceInput";
 import DiffView from "./DiffView";
+import ProofreadPanel from "./ProofreadPanel";
 
 type Tool = {
   key: string;
@@ -83,6 +84,7 @@ export default function WritePanel({ project }: { project: Project }) {
   const [sourceNote, setSourceNote] = useState("");
   const [diffTarget, setDiffTarget] = useState<{ before: string; after: string; readOnly: boolean } | null>(null);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showProofread, setShowProofread] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showNewArticle, setShowNewArticle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -276,6 +278,7 @@ export default function WritePanel({ project }: { project: Project }) {
             <button className="historyButton" onClick={() => setShowSources((v) => !v)}>📚 出典（{sources.length}）</button>
             <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
             <button className="historyButton" onClick={() => setShowChecklist(true)}>✅ 公開前チェック</button>
+            <button className="historyButton" onClick={() => setShowProofread(true)}>📐 文章校正</button>
             <button className="writeSaveButton" onClick={save}>{busy ? "保存中" : "保存"}</button>
           </div>
         </div>
@@ -390,6 +393,14 @@ export default function WritePanel({ project }: { project: Project }) {
             <div className="modalActions"><button onClick={() => setShowHistory(false)}>閉じる</button></div>
           </div>
         </div>
+      )}
+      {showProofread && e && (
+        <ProofreadPanel
+          episodeId={e.id}
+          content={e.content}
+          onApply={(next) => setE({ ...e, content: next })}
+          onClose={() => setShowProofread(false)}
+        />
       )}
       {diffTarget && (
         <DiffView
