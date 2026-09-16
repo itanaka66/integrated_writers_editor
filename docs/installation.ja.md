@@ -155,6 +155,96 @@ http://localhost:3000 を開きます。
 NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
 ```
 
+### 方式BをLinuxの常駐サービス（systemd）として動かす
+
+再起動やクラッシュ後も自動復帰する、Dockerを使わないネイティブ構築にしたい場合は、上記の開発用コマンドの代わりにバックエンド・フロントエンドを`systemd`サービスとして動かしてください。まずフロントエンドを本番ビルドします：
+
+```bash
+cd apps/web
+npm install
+npm run build
+```
+
+`/etc/systemd/system/ine-api.service`を作成：
+
+```ini
+[Unit]
+Description=Integrated Writers Editor - API
+After=network.target
+
+[Service]
+Type=simple
+User=<your-user>
+WorkingDirectory=/path/to/integrated_writers_editor/apps/api
+Environment="PATH=/path/to/integrated_writers_editor/apps/api/.venv/bin"
+ExecStart=/path/to/integrated_writers_editor/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/systemd/system/ine-web.service`も同様に作成：
+
+```ini
+[Unit]
+Description=Integrated Writers Editor - Web
+After=network.target ine-api.service
+
+[Service]
+Type=simple
+User=<your-user>
+WorkingDirectory=/path/to/integrated_writers_editor/apps/web
+Environment="NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`NEXT_PUBLIC_API_URL`はここでは`npm run build`時に焼き込まれます（上記のCORS/ドメインに関する注意と同じ制約）。値を変える場合は再ビルドしてください。設定後、両方を有効化・起動します：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ine-api.service ine-web.service
+sudo systemctl status ine-api.service ine-web.service
+journalctl -u ine-api.service -f   # ログを追跡
+```
+
+公開ドメインで運用する場合は、前段にnginxを立ててください（上記のDocker Compose版のリバースプロキシの説明と同じ考え方です。ポート一覧は[requirements.ja.md](requirements.ja.md)参照）：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.example;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+続けて[Certbot](https://certbot.eff.org/)で無料のTLS証明書を取得します：
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.example
+```
+
 ## 4. 初回ログイン
 
 ユーザーごとのアカウントではなく、共有の管理者アカウントが1つだけ存在します（理由は[requirements.ja.md](requirements.ja.md)と[操作マニュアルのログイン項目](user-guide.ja.md#ログイン)を参照）。ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログインしてください。ログイン画面のGoogle/GitHubボタンは意図的に無効化されています。OAuthには対応していません。

@@ -155,6 +155,96 @@ Accessing this dev server (`npm run dev`, not the production build) through anyt
 NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
 ```
 
+### Running Option B as a persistent Linux service (systemd)
+
+For a native (non-Docker) deployment that survives reboots and restarts on crash, run the backend and frontend as `systemd` services instead of the dev commands above. Build the frontend for production first:
+
+```bash
+cd apps/web
+npm install
+npm run build
+```
+
+Create `/etc/systemd/system/ine-api.service`:
+
+```ini
+[Unit]
+Description=Integrated Writers Editor - API
+After=network.target
+
+[Service]
+Type=simple
+User=<your-user>
+WorkingDirectory=/path/to/integrated_writers_editor/apps/api
+Environment="PATH=/path/to/integrated_writers_editor/apps/api/.venv/bin"
+ExecStart=/path/to/integrated_writers_editor/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+And `/etc/systemd/system/ine-web.service`:
+
+```ini
+[Unit]
+Description=Integrated Writers Editor - Web
+After=network.target ine-api.service
+
+[Service]
+Type=simple
+User=<your-user>
+WorkingDirectory=/path/to/integrated_writers_editor/apps/web
+Environment="NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1"
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`NEXT_PUBLIC_API_URL` here is baked in at `npm run build` time (same caveat as the Docker image — see the CORS/domain note above), so rebuild if you change it. Then enable and start both:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ine-api.service ine-web.service
+sudo systemctl status ine-api.service ine-web.service
+journalctl -u ine-api.service -f   # tail logs
+```
+
+For a public domain, put nginx in front (same idea as the Docker Compose reverse-proxy note above — see [requirements.md](requirements.md) for the full port list):
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.example;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+Then get a free TLS certificate with [Certbot](https://certbot.eff.org/):
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.example
+```
+
 ## 4. First login
 
 There is a single shared admin account, not per-user accounts — see [requirements.md](requirements.md) and the [user guide](user-guide.md#login) for why. Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured. The Google/GitHub buttons on the login screen are intentionally disabled; there is no OAuth support.
