@@ -56,6 +56,14 @@ cp .env.example .env
 
 Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL`.
 
+**Configuring `CORS_ORIGINS`:** this controls which browser origins are allowed to call the API. It defaults to `*` (any origin), which is why the app works out of the box no matter what host/IP/domain you access it from — the API is already gated by its own Basic Auth login, so this isn't opening up anything that wasn't already behind a password. To restrict it instead, set a comma-separated list of the exact origins the web app is served from, e.g.:
+
+```bash
+CORS_ORIGINS=https://writer.example.com,http://192.168.1.10:3000
+```
+
+Each entry must be the *origin* the browser sends (scheme + host + port, no trailing slash, no path) — it must match whatever address you actually type into the browser to reach the web app, not the API's own address. If it doesn't, API calls fail and the login screen shows "APIに接続できませんでした" (a connection error, not a wrong-password error — see the Troubleshooting table below). After editing `.env`, recreate the `api` container to pick up the change: `docker compose up -d api` (no rebuild needed). You can also change this later from 設定 > 接続設定 in the app itself, without touching `.env` or restarting anything — see [user-guide.md](user-guide.md#connection-settings).
+
 ```bash
 docker compose up --build
 ```
