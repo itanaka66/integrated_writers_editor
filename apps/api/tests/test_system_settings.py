@@ -23,6 +23,23 @@ def test_setting_an_override_takes_effect(client):
     assert r.json()["qdrant_url"] == "http://qdrant2:6333"
 
 
+def test_cors_origins_cannot_be_set_from_the_client(client):
+    # cors_origins is intentionally not a field on SystemSettingsUpdate —
+    # CORS_ORIGINS is env-only, never settable from the Settings screen (or
+    # any other client). A raw request smuggling the field in anyway must
+    # be silently ignored (extra fields dropped), not applied.
+    before = client.get("/api/v1/system-settings").json()["cors_origins"]
+
+    r = client.put("/api/v1/system-settings", json={"cors_origins": "https://evil.example"})
+    assert r.status_code == 200
+    assert r.json()["cors_origins"] == before
+    assert r.json()["cors_origins_is_override"] is False
+
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["cors_origins"] == before
+    assert r.json()["cors_origins_is_override"] is False
+
+
 def test_clearing_an_override_with_empty_string_reverts_to_env(client):
     client.put("/api/v1/system-settings", json={"ollama_model": "custom-model"})
     r = client.get("/api/v1/system-settings")

@@ -62,6 +62,8 @@ RAGセマンティック検索の埋め込みは、生成に使うAIバックエ
 | はじめての方向けガイド | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
 | 操作マニュアル | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
 
+API仕様の全体はサーバー起動中であれば`http://localhost:8000/docs`のインタラクティブなSwagger UIで確認できます（生JSONは`/openapi.json`）。オフライン閲覧・差分確認用に静的なコピーを[docs/openapi.json](docs/openapi.json)としてコミットしています — エンドポイントを変更したら`cd apps/api && python scripts/export_openapi.py`で再生成してください。
+
 ## クイックスタート
 
 Dockerに不慣れな方や最速でセットアップしたい方は、リポジトリをクローンして対話式セットアップスクリプトを実行してください。Windows・macOS・Linux・クラウドVMのいずれでも同じ手順で、いくつかのYes/No質問に答えるだけでセットアップが完了します。

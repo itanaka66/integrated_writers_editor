@@ -129,4 +129,6 @@ class SystemSettingsUpdate(BaseModel):
     openai_model:str|None=None
     google_api_key:str|None=None
     google_model:str|None=None
-    cors_origins:str|None=None
+    # cors_origins is deliberately NOT here — it's env-only
+    # (CORS_ORIGINS), never settable from the client. See main.py's
+    # system_settings_put for the corresponding server-side guard.

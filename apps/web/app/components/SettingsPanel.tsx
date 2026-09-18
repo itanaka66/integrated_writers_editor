@@ -63,7 +63,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     anthropic_api_key: "", anthropic_model: "",
     openai_api_key: "", openai_model: "",
     google_api_key: "", google_model: "",
-    cors_origins: "",
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -124,7 +123,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         anthropic_api_key: "", anthropic_model: s.anthropic_model,
         openai_api_key: "", openai_model: s.openai_model,
         google_api_key: "", google_model: s.google_model,
-        cors_origins: s.cors_origins,
       });
     });
   }, [tab]);
@@ -152,7 +150,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       anthropic_api_key: "", anthropic_model: s.anthropic_model,
       openai_api_key: "", openai_model: s.openai_model,
       google_api_key: "", google_model: s.google_model,
-      cors_origins: s.cors_origins,
     });
   }
 
@@ -362,16 +359,15 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               <div />
 
               <label>
-                CORS許可オリジン {sys.cors_origins_is_override && <span className="savedNote">（上書き中）</span>}
-                <input value={sysForm.cors_origins} onChange={(e) => setSysForm({ ...sysForm, cors_origins: e.target.value })} placeholder="http://localhost:3000" />
+                CORS許可オリジン<input value={sys.cors_origins} readOnly disabled />
               </label>
-              {sys.cors_origins_is_override && <button type="button" onClick={() => resetField("cors_origins")} disabled={sysBusy}>既定値に戻す</button>}
+              <div />
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                このAPIをブラウザから呼び出せるオリジンです。カンマ区切りで複数指定するか、任意のオリジンを許可する場合は <code>*</code> を入力してください。
+                このAPIをブラウザから呼び出せるオリジンです。セキュリティ上の理由からこの画面からは変更できません。サーバーの環境変数 <code>CORS_ORIGINS</code> を編集してコンテナを再作成してください（.envの設定方法は<a href="https://github.com/itanaka66/integrated_writers_editor/blob/main/docs/installation.ja.md" target="_blank" rel="noreferrer">インストールマニュアル</a>を参照）。
               </p>
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollama・CORS許可オリジンはいずれもステートレスなため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
+                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれもステートレスなため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
               </p>
               <div className="entityFormActions">
                 <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? "保存中..." : "保存"}</button>
