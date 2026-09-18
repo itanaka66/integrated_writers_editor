@@ -81,12 +81,23 @@ To stop: `docker compose down`. To stop **and delete all data** (Postgres + Qdra
 
 **Optional — Cloudflare Tunnel instead of port forwarding:** if you don't want to open any inbound ports on your router at all (no `80`/`443`/`8000` forwarding, works even behind CGNAT), [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) can expose this app to the internet over an outbound-only tunnel, with Cloudflare handling TLS for you. Requires a domain added to a (free) Cloudflare account. Two ways to set it up — same result either way:
 
+**Required `.env` settings for this setup** (regardless of dashboard vs. CLI below) — nothing else in `.env` needs to change:
+
+| Variable | Value | Why |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://your-domain.example/api/v1` (or the same-origin relative `/api/v1` — see note below) | Baked into the web app's JavaScript at build time — this is *not* live-reloadable, so changing it needs `docker compose up -d --build web` (rebuild), not just a restart. |
+| `CORS_ORIGINS` | `https://your-domain.example` | Env-only (can't be set from the Settings screen — see [requirements.md](requirements.md)); the API only accepts browser requests whose `Origin` header matches this. Apply with `docker compose up -d api` (no rebuild needed here, unlike the frontend). |
+
+Everything else (`ADMIN_PASSWORD`, `OLLAMA_URL`, `DATABASE_URL`, etc.) is unaffected by adding a tunnel — those describe how the containers reach each other and the host, not how the browser reaches them.
+
+Using the same-origin relative path (`NEXT_PUBLIC_API_URL=/api/v1`) instead of the full `https://` URL works too, *as long as* your tunnel's ingress rules route `/api/*` on that domain to the API (step 3 below does exactly that) — the browser then calls the API on the same origin it loaded the page from, which also means `CORS_ORIGINS` becomes less critical (same-origin requests aren't subject to CORS at all), though it's still worth setting correctly for the `/docs` Swagger UI and any direct API testing from a different origin.
+
 **Dashboard (recommended — no CLI commands to create/route the tunnel):**
 
 1. In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/), go to **Networks → Tunnels** (older UIs: **Access → Tunnels**) and **Create a tunnel**. Choose the **Cloudflared** connector type — this is the only option; ignore the separate Workers/Pages "template" gallery elsewhere in the Cloudflare dashboard, which is for a different product and unrelated to this.
 2. Name the tunnel and follow the displayed install command for your OS to install and connect `cloudflared` on the Docker host.
 3. On the **Public Hostname** tab, add two hostnames pointing at the same domain: one with **Path** `api/*` → service `http://localhost:8000`, and one with an empty path → service `http://localhost:3000`. Put the `api/*` rule above the catch-all one (Cloudflare evaluates them in order).
-4. Update `.env`: `NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1` (or the same-origin relative `/api/v1`) and `CORS_ORIGINS=https://your-domain.example`, then `docker compose up -d --build web` to apply.
+4. Apply the two `.env` settings from the table above (`docker compose up -d --build web` for `NEXT_PUBLIC_API_URL`, `docker compose up -d api` for `CORS_ORIGINS`).
 
 **CLI (if you prefer config files over the dashboard):**
 
@@ -104,7 +115,7 @@ To stop: `docker compose down`. To stop **and delete all data** (Postgres + Qdra
        service: http://localhost:3000
      - service: http_status:404
    ```
-4. Run it (`cloudflared tunnel run ine`, or install it as a system service per Cloudflare's docs) and update `.env` the same way as step 4 above, then `docker compose up -d --build web` to apply.
+4. Run it (`cloudflared tunnel run ine`, or install it as a system service per Cloudflare's docs), then apply the two `.env` settings from the table above the same way as the dashboard steps.
 
 Either this or a self-hosted reverse proxy accomplish the same goal (one HTTPS domain, no exposed API port) — Cloudflare Tunnel avoids router configuration entirely at the cost of routing your traffic through Cloudflare; a self-hosted proxy keeps everything on your own infrastructure but needs `80`/`443` forwarded for certificate issuance.
 
