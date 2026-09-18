@@ -81,12 +81,23 @@ docker compose up --build
 
 **任意：ポート転送の代わりにCloudflare Tunnelを使う：** ルーターの受信ポートを一切開けたくない場合（`80`/`443`/`8000`のいずれも転送不要。CGNAT配下でも動作します）、[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)を使えば、送信専用のトンネル経由でこのアプリをインターネットに公開でき、TLSはCloudflare側が処理してくれます。（無料の）Cloudflareアカウントにドメインを追加している必要があります。設定方法は2通りあり、どちらも結果は同じです。
 
+**この構成で必要な`.env`設定**（下記のダッシュボード方式・CLI方式のどちらでも共通。これ以外の`.env`項目は変更不要です）：
+
+| 変数 | 値 | 理由 |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://your-domain.example/api/v1`（または同一オリジンの相対パス`/api/v1` — 下記の補足参照） | Next.jsのビルド時にJavaScriptへ焼き込まれる値のため、これは**動的には反映されません**。変更したら再起動ではなく`docker compose up -d --build web`（再ビルド）が必要です。 |
+| `CORS_ORIGINS` | `https://your-domain.example` | 環境変数のみで設定可能（設定画面からは変更できません — [requirements.md](requirements.md)参照）。APIは`Origin`ヘッダーがこの値と一致するブラウザリクエストのみ受け付けます。反映は`docker compose up -d api`で十分です（フロントエンドと異なり再ビルド不要）。 |
+
+`ADMIN_PASSWORD`・`OLLAMA_URL`・`DATABASE_URL`など他の項目は、トンネルを追加しても影響を受けません — これらはコンテナ同士やホストとの通信方法を指定するものであり、ブラウザからの到達方法とは無関係だからです。
+
+同一オリジンの相対パス（`NEXT_PUBLIC_API_URL=/api/v1`）を使う場合、そのドメインのトンネルのingressルールが`/api/*`をAPIへ振り分けている**限り**（下記手順3がまさにその設定です）問題なく動作します。この場合ブラウザはページを読み込んだのと同じオリジンにAPIを呼び出すため、`CORS_ORIGINS`の重要性は下がります（同一オリジンのリクエストはそもそもCORSの対象外です）が、`/docs`のSwagger UIや別オリジンからの直接APIテストのためにも、正しく設定しておくことをお勧めします。
+
 **ダッシュボード（推奨 — トンネルの作成・ルーティングにCLIコマンド不要）：**
 
 1. [Cloudflare Zero Trustダッシュボード](https://one.dash.cloudflare.com/)で **Networks → Tunnels**（旧UIでは **Access → Tunnels**）を開き、**Create a tunnel** をクリックします。コネクタの種類は **Cloudflared** を選択してください（これ一択です）。Cloudflareダッシュボードの別の場所にあるWorkers/Pages用の「テンプレート」ギャラリーとは無関係の、別の機能なので混同しないでください。
 2. トンネルに名前を付け、表示されるOS別のインストールコマンドに従ってDockerホストに`cloudflared`をインストール・接続します。
 3. **Public Hostname** タブで、同じドメインに対して2つのホスト名ルールを追加します：**Path**を`api/*`にしたルール（サービスは`http://localhost:8000`）と、パス指定なしのルール（サービスは`http://localhost:3000`）です。`api/*`のルールを、パス指定なしのルールより上に配置してください（Cloudflareは上から順に評価します）。
-4. `.env`を更新します：`NEXT_PUBLIC_API_URL=https://your-domain.example/api/v1`（同一オリジンの相対パス`/api/v1`でも可）、`CORS_ORIGINS=https://your-domain.example`。反映には`docker compose up -d --build web`が必要です。
+4. 上記の表にある2つの`.env`設定を反映します（`NEXT_PUBLIC_API_URL`は`docker compose up -d --build web`、`CORS_ORIGINS`は`docker compose up -d api`）。
 
 **CLI（ダッシュボードよりも設定ファイルで管理したい場合）：**
 
@@ -104,7 +115,7 @@ docker compose up --build
        service: http://localhost:3000
      - service: http_status:404
    ```
-4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、上記手順4と同じ要領で`.env`を更新し、`docker compose up -d --build web`で反映します。
+4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、ダッシュボード手順と同じ要領で上記の表にある2つの`.env`設定を反映します。
 
 どちらの方法も「1つのHTTPSドメインに集約し、APIのポートを公開しない」という同じゴールを達成します — Cloudflare Tunnelはルーター設定が一切不要な代わりに通信がCloudflare経由になり、自前のリバースプロキシは全てを自分のインフラ内に収められる代わりに証明書取得のため`80`/`443`の転送が必要です。
 
