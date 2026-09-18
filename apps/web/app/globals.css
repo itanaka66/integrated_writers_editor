@@ -2,7 +2,15 @@
 html { color-scheme: light; }
 html, body { margin: 0; min-height: 100%; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 body { background: #f5f7fb; color: #1d2433; }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
+/* Most form-control rules below only set border/padding, not background/color
+   — relying on the browser's own default rendering for those. That default
+   isn't guaranteed to be an opaque white-on-dark-text pairing (OS/browser
+   forced-dark or forced-colors modes can otherwise render them
+   transparent or low-contrast); pin it explicitly so every input/textarea/
+   select/button is readable regardless. More specific rules further down
+   (e.g. navy primary buttons) still override this as usual. */
+button, input, textarea, select { background: #fff; color: #1d2433; }
 button { cursor: pointer; }
 .center { min-height: 100vh; display: grid; place-items: center; }
 .loading { color: #687386; }
