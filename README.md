@@ -64,6 +64,8 @@ Browse the online manual: **https://itanaka66.github.io/integrated_writers_edito
 
 The full API reference is interactive Swagger UI at `http://localhost:8000/docs` on a running server (or raw JSON at `/openapi.json`). A static, committed copy for offline reading or diffing is at [docs/openapi.json](docs/openapi.json) — regenerate it after changing any endpoint with `cd apps/api && python scripts/export_openapi.py`.
 
+Database schema changes (adding/removing columns or tables) go through Alembic — see [MIGRATION.md](MIGRATION.md) for how to run and write migrations.
+
 ## Quick start
 
 New to Docker, or just want the fastest path? Clone the repo and run the interactive setup script — it works the same way on Windows, macOS, Linux, and cloud VMs, asks a few yes/no questions, and starts everything for you:
