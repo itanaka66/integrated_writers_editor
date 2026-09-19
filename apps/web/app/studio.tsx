@@ -1,6 +1,6 @@
 "use client";
-import { CSSProperties, useEffect, useState } from "react";
-import { api, clearAuth, getAuth, setUnauthorizedHandler } from "./lib/api";
+import { CSSProperties, FormEvent, useEffect, useState } from "react";
+import { api, clearAuth, getAuth, post, setUnauthorizedHandler } from "./lib/api";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
 import Sidebar, { Section } from "./components/Sidebar";
@@ -16,6 +16,16 @@ import { useResizableWidth } from "./lib/useResizableWidth";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
+  // A ?reset_token=... query param means someone followed a "forgot
+  // password" email link — that has to work whether or not they currently
+  // have a session, so it's checked before (and independently of) the
+  // authed/unauthed decision below.
+  const [resetToken, setResetToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setResetToken(params.get("reset_token"));
+  }, []);
 
   useEffect(() => {
     setUnauthorizedHandler(() => { clearAuth(); setAuthed(false); });
@@ -31,9 +41,67 @@ export default function Studio() {
     return () => setUnauthorizedHandler(null);
   }, []);
 
+  if (resetToken) return <PasswordResetScreen token={resetToken} />;
   if (authed === null) return <div className="center">確認中...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
   return <Workspace />;
+}
+
+function PasswordResetScreen({ token }: { token: string }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function submit(ev: FormEvent) {
+    ev.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("新しいパスワード（確認）が一致しません。");
+      return;
+    }
+    setBusy(true);
+    try {
+      await post("/auth/password-reset/confirm", { token, new_password: newPassword });
+      setDone(true);
+    } catch {
+      setError("このリンクは無効か、有効期限が切れています。もう一度パスワード再設定をお試しください。");
+    } finally { setBusy(false); }
+  }
+
+  function backToLogin() {
+    // Clear the query param and land on the normal Login screen.
+    window.location.href = "/";
+  }
+
+  return (
+    <div className="center">
+      <form className="loginCard" onSubmit={submit}>
+        <b>✦ Integrated writers Editor</b>
+        <p>パスワード再設定</p>
+        {done ? (
+          <>
+            <p className="savedNote">パスワードを再設定しました。新しいパスワードでログインしてください。</p>
+            <button type="button" onClick={backToLogin}>ログイン画面へ</button>
+          </>
+        ) : (
+          <>
+            <input
+              placeholder="新しいパスワード" type="password" value={newPassword} autoFocus
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <input
+              placeholder="新しいパスワード（確認）" type="password" value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            {error && <div className="loginError">{error}</div>}
+            <button type="submit" disabled={busy || !newPassword}>{busy ? "再設定中..." : "パスワードを再設定"}</button>
+          </>
+        )}
+      </form>
+    </div>
+  );
 }
 
 function Workspace() {

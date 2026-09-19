@@ -172,22 +172,62 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     api("/ai-usage/recent?limit=50").then(setUsageRecent).catch(() => {});
   }, [tab]);
 
-  useEffect(() => {
-    if (tab !== "users") return;
-    loadUsers();
-  }, [tab]);
-
   const currentUsername = getAuth()?.u ?? "";
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserAccount[] | null>(null);
   const [usersError, setUsersError] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", is_admin: false });
   const [userBusy, setUserBusy] = useState(false);
   const [resetPasswordFor, setResetPasswordFor] = useState<string | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [emailEditFor, setEmailEditFor] = useState<string | null>(null);
+  const [emailEditValue, setEmailEditValue] = useState("");
+  const [selfPasswordForm, setSelfPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [selfPasswordBusy, setSelfPasswordBusy] = useState(false);
+  const [selfPasswordError, setSelfPasswordError] = useState("");
+  const [selfPasswordSaved, setSelfPasswordSaved] = useState(false);
 
   function loadUsers() {
     setUsersError("");
     api("/users").then(setUsers).catch(() => setUsersError("ユーザー一覧の読み込みに失敗しました。管理者権限が必要です。"));
+  }
+
+  useEffect(() => {
+    if (tab !== "users") return;
+    api("/auth/me").then((me: { is_admin: boolean }) => setIsAdmin(me.is_admin)).catch(() => setIsAdmin(false));
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "users" || !isAdmin) return;
+    loadUsers();
+  }, [tab, isAdmin]);
+
+  async function changeOwnPassword() {
+    setSelfPasswordError(""); setSelfPasswordSaved(false);
+    if (!selfPasswordForm.current_password || !selfPasswordForm.new_password) return;
+    if (selfPasswordForm.new_password !== selfPasswordForm.confirm_password) {
+      setSelfPasswordError("新しいパスワード（確認）が一致しません。");
+      return;
+    }
+    setSelfPasswordBusy(true);
+    try {
+      await post("/users/me/password", { current_password: selfPasswordForm.current_password, new_password: selfPasswordForm.new_password });
+      setSelfPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+      setSelfPasswordSaved(true);
+    } catch {
+      setSelfPasswordError("現在のパスワードが正しくありません。");
+    } finally { setSelfPasswordBusy(false); }
+  }
+
+  async function submitEmailEdit(username: string) {
+    setUsersError("");
+    try {
+      await put(`/users/${encodeURIComponent(username)}`, { email: emailEditValue.trim() || null });
+      setEmailEditFor(null); setEmailEditValue("");
+      loadUsers();
+    } catch {
+      setUsersError("メールアドレスの更新に失敗しました。");
+    }
   }
 
   async function createNewUser() {
@@ -572,68 +612,115 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       )}
       {tab === "users" && (
         <div style={{ marginTop: 14 }}>
-          {usersError && <p className="errorNote">{usersError}</p>}
-          {!users && !usersError && <p>読み込み中...</p>}
-          {users && (
-            <>
-              <div className="stateTable">
-                {users.map((u) => {
-                  const isSelf = u.username === currentUsername;
-                  return (
-                    <div className="stateRow" key={u.username} style={{ gridTemplateColumns: "1fr 90px 90px 1fr 130px" }}>
-                      <span><b>{u.username}</b>{isSelf && <small style={{ color: "#687386" }}>（自分）</small>}</span>
-                      <span>
-                        <label>
-                          <input type="checkbox" checked={u.is_admin} onChange={(e) => setUserAdmin(u.username, e.target.checked)} /> 管理者
-                        </label>
-                      </span>
-                      <span>
-                        <label>
-                          <input type="checkbox" checked={u.is_active} onChange={(e) => setUserActive(u.username, e.target.checked)} /> 有効
-                        </label>
-                      </span>
-                      <span>
-                        {resetPasswordFor === u.username ? (
-                          <span style={{ display: "flex", gap: 6 }}>
-                            <input
-                              type="password" placeholder="新しいパスワード" value={resetPasswordValue}
-                              onChange={(e) => setResetPasswordValue(e.target.value)}
-                            />
-                            <button onClick={() => submitPasswordReset(u.username)}>変更</button>
-                            <button onClick={() => { setResetPasswordFor(null); setResetPasswordValue(""); }}>キャンセル</button>
+          <div className="entityForm">
+            <small>パスワードを変更</small>
+            <input
+              type="password" placeholder="現在のパスワード" value={selfPasswordForm.current_password}
+              onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, current_password: e.target.value })}
+            />
+            <input
+              type="password" placeholder="新しいパスワード" value={selfPasswordForm.new_password}
+              onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, new_password: e.target.value })}
+            />
+            <input
+              type="password" placeholder="新しいパスワード（確認）" value={selfPasswordForm.confirm_password}
+              onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, confirm_password: e.target.value })}
+            />
+            <div className="entityFormActions">
+              <button
+                onClick={changeOwnPassword}
+                disabled={selfPasswordBusy || !selfPasswordForm.current_password || !selfPasswordForm.new_password}
+              >
+                {selfPasswordBusy ? "変更中..." : "パスワードを変更"}
+              </button>
+              {selfPasswordSaved && <span className="savedNote">変更しました</span>}
+            </div>
+            {selfPasswordError && <p className="errorNote">{selfPasswordError}</p>}
+          </div>
+
+          {isAdmin && (
+            <div style={{ marginTop: 28 }}>
+              <small>ユーザー管理（管理者のみ）</small>
+              {usersError && <p className="errorNote">{usersError}</p>}
+              {!users && !usersError && <p>読み込み中...</p>}
+              {users && (
+                <>
+                  <div className="stateTable" style={{ marginTop: 8 }}>
+                    {users.map((u) => {
+                      const isSelf = u.username === currentUsername;
+                      return (
+                        <div className="stateRow" key={u.username} style={{ gridTemplateColumns: "1fr 90px 90px 1fr 1fr 130px" }}>
+                          <span><b>{u.username}</b>{isSelf && <small style={{ color: "#687386" }}>（自分）</small>}</span>
+                          <span>
+                            <label>
+                              <input type="checkbox" checked={u.is_admin} onChange={(e) => setUserAdmin(u.username, e.target.checked)} /> 管理者
+                            </label>
                           </span>
-                        ) : (
-                          <button onClick={() => { setResetPasswordFor(u.username); setResetPasswordValue(""); }}>パスワード変更</button>
-                        )}
-                      </span>
-                      <span>
-                        <button onClick={() => deleteUserAccount(u.username)} disabled={isSelf} title={isSelf ? "自分自身は削除できません" : ""}>削除</button>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="entityForm" style={{ marginTop: 20 }}>
-                <small>新規ユーザーを追加</small>
-                <input
-                  placeholder="ユーザー名" value={newUser.username}
-                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                />
-                <input
-                  type="password" placeholder="パスワード" value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                />
-                <label>
-                  <input
-                    type="checkbox" checked={newUser.is_admin}
-                    onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
-                  /> 管理者権限を付与する
-                </label>
-                <button onClick={createNewUser} disabled={userBusy || !newUser.username.trim() || !newUser.password}>
-                  {userBusy ? "追加中..." : "＋ ユーザーを追加"}
-                </button>
-              </div>
-            </>
+                          <span>
+                            <label>
+                              <input type="checkbox" checked={u.is_active} onChange={(e) => setUserActive(u.username, e.target.checked)} /> 有効
+                            </label>
+                          </span>
+                          <span>
+                            {emailEditFor === u.username ? (
+                              <span style={{ display: "flex", gap: 6 }}>
+                                <input
+                                  type="email" placeholder="メールアドレス" value={emailEditValue}
+                                  onChange={(e) => setEmailEditValue(e.target.value)}
+                                />
+                                <button onClick={() => submitEmailEdit(u.username)}>保存</button>
+                                <button onClick={() => { setEmailEditFor(null); setEmailEditValue(""); }}>キャンセル</button>
+                              </span>
+                            ) : (
+                              <button onClick={() => { setEmailEditFor(u.username); setEmailEditValue(u.email ?? ""); }}>
+                                {u.email || "メール未設定"}
+                              </button>
+                            )}
+                          </span>
+                          <span>
+                            {resetPasswordFor === u.username ? (
+                              <span style={{ display: "flex", gap: 6 }}>
+                                <input
+                                  type="password" placeholder="新しいパスワード" value={resetPasswordValue}
+                                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                                />
+                                <button onClick={() => submitPasswordReset(u.username)}>変更</button>
+                                <button onClick={() => { setResetPasswordFor(null); setResetPasswordValue(""); }}>キャンセル</button>
+                              </span>
+                            ) : (
+                              <button onClick={() => { setResetPasswordFor(u.username); setResetPasswordValue(""); }}>パスワード変更</button>
+                            )}
+                          </span>
+                          <span>
+                            <button onClick={() => deleteUserAccount(u.username)} disabled={isSelf} title={isSelf ? "自分自身は削除できません" : ""}>削除</button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="entityForm" style={{ marginTop: 20 }}>
+                    <small>新規ユーザーを追加</small>
+                    <input
+                      placeholder="ユーザー名" value={newUser.username}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    />
+                    <input
+                      type="password" placeholder="パスワード" value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    />
+                    <label>
+                      <input
+                        type="checkbox" checked={newUser.is_admin}
+                        onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
+                      /> 管理者権限を付与する
+                    </label>
+                    <button onClick={createNewUser} disabled={userBusy || !newUser.username.trim() || !newUser.password}>
+                      {userBusy ? "追加中..." : "＋ ユーザーを追加"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
-import { api, ApiError, oauthUrl, setAuth } from "../lib/api";
+import { api, ApiError, oauthUrl, post, setAuth } from "../lib/api";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -8,6 +8,10 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [providers, setProviders] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
 
   useEffect(() => {
     api("/auth/providers")
@@ -46,6 +50,18 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     } finally { setBusy(false); }
   }
 
+  async function submitForgotPassword() {
+    setForgotBusy(true);
+    try {
+      const r: { message: string } = await post("/auth/password-reset/request", { email: forgotEmail });
+      setForgotMessage(r.message);
+    } catch {
+      // The endpoint always returns 200; a thrown error here means a
+      // connection problem, not an invalid email — show a generic note.
+      setForgotMessage("リクエストの送信に失敗しました。しばらくしてから再度お試しください。");
+    } finally { setForgotBusy(false); }
+  }
+
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
@@ -55,6 +71,29 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         <input placeholder="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
+        <button
+          type="button"
+          className="loginForgotLink"
+          onClick={() => { setShowForgotPassword((v) => !v); setForgotMessage(""); }}
+        >
+          パスワードをお忘れですか？
+        </button>
+        {showForgotPassword && (
+          <div className="loginForgotForm">
+            {!forgotMessage ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  placeholder="登録済みのメールアドレス" type="email" value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitForgotPassword(); } }}
+                />
+                <button type="button" onClick={submitForgotPassword} disabled={forgotBusy || !forgotEmail}>{forgotBusy ? "送信中..." : "再設定メールを送信"}</button>
+              </div>
+            ) : (
+              <p className="savedNote">{forgotMessage}</p>
+            )}
+          </div>
+        )}
         <div className="loginDivider">または</div>
         <button
           type="button"

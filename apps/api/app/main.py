@@ -26,9 +26,12 @@ from . import backup as backup_mod
 from . import materials
 from editor_common.users import (
  ensure_bootstrap_user,list_users,create_user,change_password,set_active,delete_user,
- UsernameTakenError,UserNotFoundError,get_or_create_oauth_user,
+ UsernameTakenError,UserNotFoundError,get_or_create_oauth_user,authenticate_user,
 )
 from editor_common.oauth import google_provider,github_provider,register_oauth_routes
+from editor_common import session_tokens
+from . import mail as mail_mod
+import hashlib
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='writers-studio-change-me':
@@ -271,6 +274,13 @@ def _user_out(u):return UserOut.model_validate(u)
 @app.get('/api/v1/auth/me',response_model=UserOut)
 def auth_me(user:User=Depends(get_current_user)):
  return _user_out(user)
+@app.post('/api/v1/users/me/password',response_model=UserOut)
+def users_change_own_password(x:SelfPasswordChangeRequest,db:Session=Depends(get_db),user:User=Depends(get_current_user)):
+ if authenticate_user(db,User,user.username,x.current_password) is None:
+  raise HTTPException(400,'現在のパスワードが正しくありません。')
+ change_password(db,User,user.username,x.new_password)
+ db.refresh(user)
+ return _user_out(user)
 def _other_active_admins_remain(db,excluding_username:str)->bool:
  return db.scalar(select(User.id).where(User.is_admin,User.is_active,User.username!=excluding_username).limit(1)) is not None
 @app.get('/api/v1/users',response_model=list[UserOut])
@@ -295,6 +305,7 @@ def users_update(username:str,x:UserUpdateRequest,db:Session=Depends(get_db),adm
   raise HTTPException(400,'唯一の有効な管理者アカウントを降格・無効化することはできません。')
  if x.is_admin is not None:u.is_admin=x.is_admin
  if x.is_active is not None:u.is_active=x.is_active
+ if x.email is not None:u.email=x.email.strip() or None
  db.commit();db.refresh(u)
  return _user_out(u)
 @app.post('/api/v1/users/{username}/password',response_model=UserOut)
@@ -313,6 +324,39 @@ def users_delete(username:str,db:Session=Depends(get_db),admin:User=Depends(requ
  if u.username==admin.username:
   raise HTTPException(400,'自分自身のアカウントは削除できません。')
  delete_user(db,User,username)
+_PASSWORD_RESET_GENERIC_MESSAGE='ご入力いただいたメールアドレス宛にパスワード再設定用のリンクを送信しました（該当するアカウントが存在する場合）。'
+def _password_fingerprint(password_hash:str)->str:
+ return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+@app.post('/api/v1/auth/password-reset/request',response_model=PasswordResetGenericOut)
+def password_reset_request(x:PasswordResetRequestIn,db:Session=Depends(get_db)):
+ # Always returns the same response regardless of whether the email is
+ # known, active, or has a password at all (OAuth-only accounts are
+ # skipped) — this is standard practice so the endpoint can't be used to
+ # enumerate which email addresses have accounts.
+ if not settings.session_secret or not settings.public_base_url:
+  logger.warning('Password-reset requested but SESSION_SECRET/PUBLIC_BASE_URL is not configured; cannot send a reset link.')
+  return PasswordResetGenericOut(message=_PASSWORD_RESET_GENERIC_MESSAGE)
+ email=(x.email or '').strip().lower()
+ user=db.scalar(select(User).where(User.email==email)) if email else None
+ if user is not None and user.is_active and user.password_hash:
+  token=session_tokens.sign(settings.session_secret,{'uid':user.id,'pwfp':_password_fingerprint(user.password_hash)},max_age_seconds=1800)
+  link=f"{settings.public_base_url.rstrip('/')}/?reset_token={token}"
+  ok=mail_mod.send_mail(user.email,'パスワード再設定のご案内',f'パスワードを再設定するには、以下のリンクを開いてください（30分間有効です）。\n\n{link}\n\nこのメールに心当たりがない場合は、このメールを無視してください。')
+  if not ok:
+   logger.warning('Failed to send password-reset email to user id %s',user.id)
+ else:
+  logger.info('Password-reset requested for an email with no matching resettable account')
+ return PasswordResetGenericOut(message=_PASSWORD_RESET_GENERIC_MESSAGE)
+@app.post('/api/v1/auth/password-reset/confirm',response_model=PasswordResetGenericOut)
+def password_reset_confirm(x:PasswordResetConfirmIn,db:Session=Depends(get_db)):
+ payload=session_tokens.verify(settings.session_secret,x.token) if settings.session_secret else None
+ if not payload or 'uid' not in payload:
+  raise HTTPException(400,'このリンクは無効か、有効期限が切れています。もう一度パスワード再設定をお試しください。')
+ user=db.get(User,payload['uid'])
+ if user is None or not user.password_hash or _password_fingerprint(user.password_hash)!=payload.get('pwfp'):
+  raise HTTPException(400,'このリンクは無効か、有効期限が切れています。もう一度パスワード再設定をお試しください。')
+ change_password(db,User,user.username,x.new_password)
+ return PasswordResetGenericOut(message='パスワードを再設定しました。新しいパスワードでログインしてください。')
 def _system_settings_out(db):
  row=db.get(RuntimeConfig,rc.SINGLETON_ID)
  cfg=rc.get_effective_config(db)
