@@ -138,3 +138,11 @@ class SystemSettingsUpdate(BaseModel):
     # cors_origins is deliberately NOT here — it's env-only
     # (CORS_ORIGINS), never settable from the client. See main.py's
     # system_settings_put for the corresponding server-side guard.
+
+import datetime
+class UserOut(BaseModel):
+    username:str; email:str|None=None; is_admin:bool; is_active:bool; created_at:datetime.datetime
+    model_config=ConfigDict(from_attributes=True)
+class UserCreateRequest(BaseModel): username:str; password:str; is_admin:bool=False
+class UserUpdateRequest(BaseModel): is_admin:bool|None=None; is_active:bool|None=None
+class PasswordChangeRequest(BaseModel): new_password:str
