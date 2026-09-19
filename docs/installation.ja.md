@@ -95,29 +95,51 @@ docker compose up --build
 **ダッシュボード（推奨 — トンネルの作成・ルーティングにCLIコマンド不要）：**
 
 1. [Cloudflare Zero Trustダッシュボード](https://one.dash.cloudflare.com/)で **Networks → Tunnels**（旧UIでは **Access → Tunnels**）を開き、**Create a tunnel** をクリックします。コネクタの種類は **Cloudflared** を選択してください（これ一択です）。Cloudflareダッシュボードの別の場所にあるWorkers/Pages用の「テンプレート」ギャラリーとは無関係の、別の機能なので混同しないでください。
-2. トンネルに名前を付け、表示されるOS別のインストールコマンドに従ってDockerホストに`cloudflared`をインストール・接続します。
-3. **Public Hostname** タブで、同じドメインに対して2つのホスト名ルールを追加します：**Path**を`api/*`にしたルール（サービスは`http://localhost:8000`）と、パス指定なしのルール（サービスは`http://localhost:3000`）です。`api/*`のルールを、パス指定なしのルールより上に配置してください（Cloudflareは上から順に評価します）。
+2. トンネルに名前を付けます。インストール手順の環境選択で、ホストOSではなく **Docker** を選ぶと、トークン入り済みの`docker run cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <your-token>`コマンドが表示されます。このコマンドをそのまま実行せず、トークンだけをコピーして、`docker-compose.yml`（または`docker-compose.release.yml`）に既存の`web`/`api`サービスと並べて以下のサービスを追加してください。これで他のサービスと同じ`docker compose`スタックでトンネルも管理できます：
+   ```yaml
+   services:
+     # ... 既存の web, api, db, qdrant サービス ...
+     cloudflared:
+       image: cloudflare/cloudflared:latest
+       restart: unless-stopped
+       command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+       depends_on: [web, api]
+   ```
+   トークンはcomposeファイルに直接書かず、`.env`に`CLOUDFLARE_TUNNEL_TOKEN=...`として保存し、`docker compose up -d cloudflared`で起動します。このダッシュボード／トークン方式では、ホスト側に`~/.cloudflared/config.yml`は一切不要です — 下の手順3のingressルールはCloudflareのダッシュボード側で管理されます。
+3. **Public Hostname** タブで、同じドメインに対して2つのホスト名ルールを追加します：**Path**を`api/*`にしたルール（サービスは`http://api:8000` — `cloudflared`はcomposeのネットワーク越しに他サービスへ到達するため、`localhost`ではなくコンテナ名を指定します）と、パス指定なしのルール（サービスは`http://web:3000`）です。`api/*`のルールを、パス指定なしのルールより上に配置してください（Cloudflareは上から順に評価します）。
 4. 上記の表にある2つの`.env`設定を反映します（`NEXT_PUBLIC_API_URL`は`docker compose up -d --build web`、`CORS_ORIGINS`は`docker compose up -d api`）。
 
-**CLI（ダッシュボードよりも設定ファイルで管理したい場合）：**
+**CLI／Docker（設定ファイルベースで、ダッシュボードよりingressルールを細かく管理したい場合）：**
 
-1. Dockerホストに`cloudflared`をインストール（または専用コンテナとして実行 — Cloudflareのドキュメント参照）し、アカウントに認証させます：`cloudflared tunnel login`。
-2. 名前付きトンネルを作成し、ドメインをそこにルーティングします：`cloudflared tunnel create ine`、続けて`cloudflared tunnel route dns ine your-domain.example`。
-3. トンネルの設定ファイル（`~/.cloudflared/config.yml`）に、パスごとに各サービスへ振り分ける**ingressルール**を追加します。これにより、リバースプロキシを立てなくても`web`と`api`の両方を同じドメインの配下に置けます：
+1. Dockerホストで一度だけトンネルを認証します（この最初の1ステップのためだけにローカルへ`cloudflared`のインストールが必要です — ブラウザでのログインだけで、常駐させるものではありません）：`cloudflared tunnel login`、続けて`cloudflared tunnel create ine`、さらに`cloudflared tunnel route dns ine your-domain.example`。これで`~/.cloudflared/<tunnel-id>.json`に認証情報が書き出され、トンネルIDが表示されます。
+2. `~/.cloudflared/config.yml`にingress設定を書きます。これにより、リバースプロキシを立てなくても`web`と`api`の両方を同じドメインの配下に置けます。このファイルはコンテナにマウントするので、`localhost`ではなくコンテナネットワークのサービス名（`api`、`web`）を指定してください：
    ```yaml
    tunnel: <tunnel-id>
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   credentials-file: /etc/cloudflared/<tunnel-id>.json
    ingress:
      - hostname: your-domain.example
        path: ^/api/.*
-       service: http://localhost:8000
+       service: http://api:8000
      - hostname: your-domain.example
-       service: http://localhost:3000
+       service: http://web:3000
      - service: http_status:404
    ```
-4. トンネルを起動し（`cloudflared tunnel run ine`、またはCloudflareのドキュメントに従いシステムサービス化）、ダッシュボード手順と同じ要領で上記の表にある2つの`.env`設定を反映します。
+3. `cloudflared`自体をホストにインストールする代わりに、同じcomposeネットワーク上のコンテナとして動かします。`docker-compose.yml`（または`docker-compose.release.yml`）に、既存の`web`/`api`サービスと並べて以下のサービスを追加してください：
+   ```yaml
+   services:
+     # ... 既存の web, api, db, qdrant サービス ...
+     cloudflared:
+       image: cloudflare/cloudflared:latest
+       restart: unless-stopped
+       command: tunnel --config /etc/cloudflared/config.yml run
+       volumes:
+         - ~/.cloudflared:/etc/cloudflared:ro
+       depends_on: [web, api]
+   ```
+   あとは`docker compose up -d cloudflared`で起動するだけです。これが唯一の外部からの入り口になるなら、`web`/`api`側に`80`/`443`/`8000`のポートマッピングは一切不要です（`cloudflared`がcomposeネットワーク上でサービス名を使って直接到達するため）。
+4. ダッシュボード手順と同じ要領で、上記の表にある2つの`.env`設定を反映します。
 
-どちらの方法も「1つのHTTPSドメインに集約し、APIのポートを公開しない」という同じゴールを達成します — Cloudflare Tunnelはルーター設定が一切不要な代わりに通信がCloudflare経由になり、自前のリバースプロキシは全てを自分のインフラ内に収められる代わりに証明書取得のため`80`/`443`の転送が必要です。
+ダッシュボード方式（トークンベースで、認証情報は自動生成）でもCLI方式（設定ファイルベースで、ingressルールを細かく制御可能）でも、コンテナとして動かす場合はどちらも同様に機能します。管理のしやすさで好きな方を選んでください。どちらの方法も「1つのHTTPSドメインに集約し、APIのポートを公開しない」という同じゴールを達成します — Cloudflare Tunnelはルーター設定が一切不要な代わりに通信がCloudflare経由になり、自前のリバースプロキシは全てを自分のインフラ内に収められる代わりに証明書取得のため`80`/`443`の転送が必要です。
 
 ## 2b. 方式A2 — デスクトップインストーラ（Windows / macOS）
 
