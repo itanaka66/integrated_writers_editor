@@ -122,4 +122,40 @@ describe("WritePanel", () => {
     await waitFor(() => expect(screen.queryByText("文章校正")).not.toBeInTheDocument());
     expect(screen.getByDisplayValue("改訂後の本文")).toBeInTheDocument();
   });
+
+  it("opens the same proofread panel from the AI EDITOR sidebar's 校正 shortcut", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockResolvedValue({ diffs: [] });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("校正")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("校正"));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "文章校正" })).toBeInTheDocument());
+    expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/proofread`, {});
+  });
+
+  it("copies the content to the clipboard for pasting into Word", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📋 Wordにコピー")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📋 Wordにコピー"));
+
+    // jsdom has no ClipboardItem, so this exercises the plain-text fallback
+    // path — the rich text/html path is gated behind a runtime feature
+    // check that's simply unavailable in this test environment.
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(episode.content));
+    await waitFor(() => expect(screen.getByText(/コピーしました/)).toBeInTheDocument());
+  });
 });
