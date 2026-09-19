@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, clearAuth } from "../lib/api";
+import { api, ApiError, clearAuth } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import NewProjectForm from "./NewProjectForm";
 import ImportPanel from "./ImportPanel";
@@ -24,8 +24,12 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
         return [p.id, eps.length] as const;
       }));
       setCounts(Object.fromEntries(entries));
-    } catch {
-      setError("プロジェクトの読み込みに失敗しました。APIに接続できないか、CORS_ORIGINSの設定に問題がある可能性があります。");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setError("ログイン試行の失敗が続いたため、一時的にアクセスがロックされています。しばらく待ってから再度お試しください。");
+      } else {
+        setError("プロジェクトの読み込みに失敗しました。APIに接続できないか、CORS_ORIGINSの設定に問題がある可能性があります。");
+      }
     } finally { setBusy(false); }
   }
   useEffect(() => { load(); }, []);

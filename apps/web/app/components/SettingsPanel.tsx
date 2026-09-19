@@ -166,8 +166,8 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   useEffect(() => {
     if (tab !== "usage") return;
-    api("/ai-usage/summary").then(setUsageSummary);
-    api("/ai-usage/recent?limit=50").then(setUsageRecent);
+    api("/ai-usage/summary").then(setUsageSummary).catch(() => {});
+    api("/ai-usage/recent?limit=50").then(setUsageRecent).catch(() => {});
   }, [tab]);
 
   function applySettingsResponse(s: SystemSettings) {

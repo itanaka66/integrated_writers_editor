@@ -26,7 +26,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
   const [replaceResult, setReplaceResult] = useState<{ episodes: TextReplaceEpisodeResult[]; total_replaced: number } | null>(null);
   const [searched, setSearched] = useState(false);
 
-  useEffect(() => { api("/projects").then(setProjects); }, []);
+  useEffect(() => { api("/projects").then(setProjects).catch(() => {}); }, []);
   const nameOf = (pid: number) => projects.find((p) => p.id === pid)?.name || `#${pid}`;
 
   async function search() {
