@@ -50,6 +50,7 @@ class _FlakyClient:
 
     async def post(self, url, json):
         _FlakyClient.calls["count"] += 1
+        _FlakyClient.last_json = json
         if _FlakyClient.calls["count"] <= self.fail_times:
             raise httpx.ConnectError("connection refused")
         return _FakeResponse(self.payload)
@@ -76,3 +77,12 @@ def test_generate_gives_up_after_max_attempts(monkeypatch):
     with pytest.raises(httpx.ConnectError):
         asyncio.run(ollama.generate("hello", model="test-model"))
     assert _FlakyClient.calls["count"] == common_ollama.MAX_ATTEMPTS
+
+
+def test_generate_sends_the_configured_generation_options(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS
