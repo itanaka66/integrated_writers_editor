@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Login from "./Login";
-import { api, setAuth } from "../lib/api";
+import { api, ApiError, setAuth } from "../lib/api";
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   api: vi.fn(),
   setAuth: vi.fn(),
 }));
@@ -51,6 +52,20 @@ describe("Login", () => {
 
     await waitFor(() => expect(screen.getByText(/APIに接続できませんでした/)).toBeInTheDocument());
     expect(screen.queryByText("ユーザー名またはパスワードが違います。")).not.toBeInTheDocument();
+    expect(onLoggedIn).not.toHaveBeenCalled();
+  });
+
+  it("shows a lockout message on a 429 instead of the generic connection error", async () => {
+    vi.mocked(api).mockRejectedValue(new ApiError(429, "request failed: 429"));
+    const onLoggedIn = vi.fn();
+    render(<Login onLoggedIn={onLoggedIn} />);
+
+    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "writers" } });
+    fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
+
+    await waitFor(() => expect(screen.getByText(/ロックされています/)).toBeInTheDocument());
+    expect(screen.queryByText(/APIに接続できませんでした/)).not.toBeInTheDocument();
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
