@@ -288,7 +288,9 @@ sudo certbot --nginx -d your-domain.example
 
 ## 4. First login
 
-There is a single shared admin account, not per-user accounts — see [requirements.md](requirements.md) and the [user guide](user-guide.md#login) for why. Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured. The Google/GitHub buttons on the login screen are intentionally disabled; there is no OAuth support.
+On first startup, one admin account is created automatically from `.env`'s `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`. Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured. Additional accounts can be added afterward by an admin from Settings > User Management.
+
+The Google/GitHub buttons on the login screen only become active if you've configured OAuth2 in `.env` (`GOOGLE_CLIENT_ID`/`GITHUB_CLIENT_ID` etc. — see the comments in `.env.example` for what's needed and how to register with each provider). Leave them unset and the buttons stay disabled; the admin-password login above still works either way.
 
 ## 5. Verifying the install
 
@@ -296,6 +298,45 @@ There is a single shared admin account, not per-user accounts — see [requireme
 - The demo project ("恐竜時代文明開拓記 DEMO") should appear on the dashboard after logging in for the first time against a fresh database.
 - Backend tests: `cd apps/api && pytest -q` (52 tests as of this writing).
 - Frontend build/lint: `cd apps/web && npm run lint && npm run build`.
+
+## Resetting the database (delete everything and start fresh)
+
+⚠️ **This cannot be undone.** Every project, episode, and user account in the database is
+deleted. Back up first with `scripts/backup.sh` or `pg_dump` if you need to keep anything.
+
+The schema is owned by [Alembic](https://alembic.sqlalchemy.org/), and migrations already
+run automatically whenever the `api` container starts (see [MIGRATION.md](../MIGRATION.md)
+for details). To rebuild the database from an empty state:
+
+1. Empty the schema (this doesn't drop the database itself, just everything in it):
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api python -c "
+   from sqlalchemy import create_engine, text
+   from app.config import settings
+   e = create_engine(settings.database_url)
+   with e.begin() as c:
+       c.execute(text('DROP SCHEMA public CASCADE'))
+       c.execute(text('CREATE SCHEMA public'))
+   print('schema reset')
+   "
+   ```
+2. Run migrations from scratch to recreate every table:
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api alembic upgrade head
+   ```
+3. Start normally — the admin account (from `.env`'s `ADMIN_USERNAME`/`ADMIN_PASSWORD`) and
+   the demo project are recreated automatically on startup:
+
+   ```bash
+   docker compose -f docker-compose.release.yml up -d api
+   ```
+
+This works the same way against an external/remote PostgreSQL instance — it resets whatever
+schema `DATABASE_URL` points at, not a `docker compose`-managed `db` container specifically.
+If you're running from source, swap `docker-compose.release.yml` for `docker-compose.yml`
+above.
 
 ## Troubleshooting
 

@@ -288,7 +288,9 @@ sudo certbot --nginx -d your-domain.example
 
 ## 4. 初回ログイン
 
-ユーザーごとのアカウントではなく、共有の管理者アカウントが1つだけ存在します（理由は[requirements.ja.md](requirements.ja.md)と[操作マニュアルのログイン項目](user-guide.ja.md#ログイン)を参照）。ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログインしてください。ログイン画面のGoogle/GitHubボタンは意図的に無効化されています。OAuthには対応していません。
+初回起動時、`.env`の`ADMIN_USERNAME`（デフォルト`admin`）と`ADMIN_PASSWORD`で1つ目の管理者アカウントが自動作成されます。ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログインしてください。追加のユーザーアカウントは、ログイン後の 設定 > ユーザー管理 タブから管理者が作成できます。
+
+ログイン画面のGoogle/GitHubボタンは、`.env`に`GOOGLE_CLIENT_ID`/`GITHUB_CLIENT_ID`等のOAuth2設定がある場合のみ有効になります（設定項目とプロバイダー側での登録方法は`.env.example`内のコメントを参照）。未設定の場合は無効のままで、上記の管理者パスワードでのログインのみ使えます。
 
 ## 5. 動作確認
 
@@ -296,6 +298,38 @@ sudo certbot --nginx -d your-domain.example
 - 新規データベースで初めてログインした際、ダッシュボードにデモ作品（「恐竜時代文明開拓記 DEMO」）が表示されること。
 - バックエンドのテスト：`cd apps/api && pytest -q`（執筆時点で52件）。
 - フロントエンドのビルド/lint：`cd apps/web && npm run lint && npm run build`。
+
+## データベースの初期化（全データを削除して作り直す）
+
+⚠️ **この操作は元に戻せません。** プロジェクト・記事・ユーザーアカウントなど、データベース内の全データが失われます。必要であれば先に`scripts/backup.sh`や`pg_dump`でバックアップを取ってください。
+
+スキーマは[Alembic](https://alembic.sqlalchemy.org/)が管理しており、マイグレーション自体は`api`コンテナ起動時に自動実行されます（詳細は[MIGRATION.md](../MIGRATION.md)を参照）。データベースを空の状態から作り直すには：
+
+1. スキーマを空にします（データベース自体は削除せず、中身だけ空にします）：
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api python -c "
+   from sqlalchemy import create_engine, text
+   from app.config import settings
+   e = create_engine(settings.database_url)
+   with e.begin() as c:
+       c.execute(text('DROP SCHEMA public CASCADE'))
+       c.execute(text('CREATE SCHEMA public'))
+   print('schema reset')
+   "
+   ```
+2. マイグレーションを最初から実行し、全テーブルを再作成します：
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api alembic upgrade head
+   ```
+3. 通常通り起動します。起動時に管理者アカウント（`.env`の`ADMIN_USERNAME`/`ADMIN_PASSWORD`）とデモ作品が自動的に再生成されます：
+
+   ```bash
+   docker compose -f docker-compose.release.yml up -d api
+   ```
+
+外部（リモート）のPostgreSQLを使っている場合も同じ手順で動作します（`docker compose`のDBコンテナではなく、`DATABASE_URL`が指す先のスキーマをリセットします）。ビルドから動かしている場合は、上記の`docker-compose.release.yml`を`docker-compose.yml`に読み替えてください。
 
 ## トラブルシューティング
 
