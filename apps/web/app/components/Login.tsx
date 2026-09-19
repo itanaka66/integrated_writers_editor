@@ -1,12 +1,26 @@
 "use client";
-import { FormEvent, useState } from "react";
-import { api, ApiError, setAuth } from "../lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import { api, ApiError, oauthUrl, setAuth } from "../lib/api";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [providers, setProviders] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
+
+  useEffect(() => {
+    api("/auth/providers")
+      .then((p: { google: boolean; github: boolean }) => setProviders(p))
+      .catch(() => { /* leave both disabled if this fails */ });
+  }, []);
+
+  function oauthLogin(provider: "google" | "github") {
+    // A real browser navigation, not a fetch — this has to run through the
+    // provider's own login page and back via a server-side redirect chain
+    // that sets an httponly cookie.
+    window.location.href = oauthUrl(`/login/${provider}`);
+  }
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
@@ -42,8 +56,24 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         {error && <div className="loginError">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
         <div className="loginDivider">または</div>
-        <button type="button" className="loginOAuth" disabled title="現在は管理者パスワードでのログインのみ対応しています">Googleでログイン</button>
-        <button type="button" className="loginOAuth" disabled title="現在は管理者パスワードでのログインのみ対応しています">GitHubでログイン</button>
+        <button
+          type="button"
+          className="loginOAuth"
+          disabled={!providers.google}
+          title={providers.google ? undefined : "現在は管理者パスワードでのログインのみ対応しています"}
+          onClick={() => oauthLogin("google")}
+        >
+          Googleでログイン
+        </button>
+        <button
+          type="button"
+          className="loginOAuth"
+          disabled={!providers.github}
+          title={providers.github ? undefined : "現在は管理者パスワードでのログインのみ対応しています"}
+          onClick={() => oauthLogin("github")}
+        >
+          GitHubでログイン
+        </button>
       </form>
     </div>
   );

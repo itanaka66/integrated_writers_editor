@@ -9,14 +9,29 @@ vi.mock("../lib/api", async (importOriginal) => ({
   setAuth: vi.fn(),
 }));
 
+// api() is called for both the login-check ("/projects") and the
+// provider-list fetch ("/auth/providers") — route each so tests can assert
+// on either independently of call order.
+function mockApiRoutes(routes: Record<string, unknown>) {
+  vi.mocked(api).mockImplementation(async (path: string) => {
+    if (path in routes) {
+      const v = routes[path];
+      if (v instanceof Error) throw v;
+      return v;
+    }
+    return [];
+  });
+}
+
 describe("Login", () => {
   beforeEach(() => {
     vi.mocked(api).mockReset();
     vi.mocked(setAuth).mockReset();
+    mockApiRoutes({ "/auth/providers": { google: false, github: false } });
   });
 
   it("stores credentials and calls onLoggedIn when the check succeeds", async () => {
-    vi.mocked(api).mockResolvedValue([]);
+    mockApiRoutes({ "/auth/providers": { google: false, github: false }, "/projects": [] });
     const onLoggedIn = vi.fn();
     render(<Login onLoggedIn={onLoggedIn} />);
 
@@ -69,9 +84,33 @@ describe("Login", () => {
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
-  it("disables the OAuth buttons since there is no OAuth integration", () => {
+  it("disables both OAuth buttons when no provider is configured", async () => {
+    mockApiRoutes({ "/auth/providers": { google: false, github: false } });
     render(<Login onLoggedIn={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled());
     expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+  });
+
+  it("enables only the configured OAuth provider buttons", async () => {
+    mockApiRoutes({ "/auth/providers": { google: true, github: false } });
+    render(<Login onLoggedIn={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+  });
+
+  it("navigates the browser to the provider login URL on click", async () => {
+    mockApiRoutes({ "/auth/providers": { google: true, github: true } });
+    const originalLocation = window.location;
+    // jsdom throws on direct assignment to window.location.href in some
+    // versions; replace the whole object for the duration of the test.
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { ...originalLocation, href: "" },
+    });
+    render(<Login onLoggedIn={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "GitHubでログイン" }));
+    expect(window.location.href).toContain("/auth/login/github");
+    Object.defineProperty(window, "location", { writable: true, value: originalLocation });
   });
 });

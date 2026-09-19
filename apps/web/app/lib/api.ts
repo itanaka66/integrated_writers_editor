@@ -1,4 +1,12 @@
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+// Base for the OAuth2 login/callback/logout routes mounted alongside the
+// rest of the API under /api/v1/auth (see apps/api/app/main.py) — these are
+// full-page browser redirects, not fetch() calls, so callers build a plain
+// URL from this rather than going through api().
+export function oauthUrl(path: string): string {
+  return `${API}/auth${path}`;
+}
 
 // The backend protects every /api/v1/* route (except /health) with a single
 // shared HTTP Basic Auth admin/password pair — see apps/api/app/auth.py.
@@ -46,7 +54,10 @@ export async function api(path: string, opts?: RequestInit) {
   const auth = getAuth();
   const headers = new Headers(opts?.headers);
   if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
-  const r = await fetch(API + path, { ...opts, headers });
+  // Always send the session cookie (if any) so an OAuth2 login — which has
+  // nothing in localStorage — stays authenticated too; it's httponly, so
+  // this is the only way for the request to carry it.
+  const r = await fetch(API + path, { ...opts, headers, credentials: "include" });
   if (r.status === 401) {
     onUnauthorized?.();
     throw new Error("unauthorized");
@@ -96,7 +107,7 @@ export function streamSSE(path: string, onMessage: (data: unknown) => void, onDo
     const auth = getAuth();
     const headers = new Headers();
     if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
-    const init: RequestInit = { headers, signal: controller.signal };
+    const init: RequestInit = { headers, signal: controller.signal, credentials: "include" };
     if (body !== undefined) {
       headers.set("Content-Type", "application/json");
       init.method = "POST";
@@ -144,7 +155,7 @@ export async function downloadFile(path: string, fallbackFilename: string) {
   const auth = getAuth();
   const headers = new Headers();
   if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
-  const r = await fetch(API + path, { headers });
+  const r = await fetch(API + path, { headers, credentials: "include" });
   if (r.status === 401) {
     onUnauthorized?.();
     throw new Error("unauthorized");
