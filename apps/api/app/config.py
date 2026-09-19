@@ -37,4 +37,12 @@ class Settings(BaseSettings):
  # Secure by default and browsers silently drop Secure cookies over plain
  # HTTP, which would make OAuth login look like it "does nothing".
  secure_cookies:bool=True
+ # Outbound email for the "forgot password" flow (see app/mail.py). Entirely
+ # opt-in: the password-reset request endpoint just logs a warning and skips
+ # sending if smtp_host is unset. Also requires session_secret and
+ # public_base_url (already defined above for OAuth2) to build/sign the
+ # reset link.
+ smtp_host:str=''; smtp_port:int=587
+ smtp_username:str=''; smtp_password:str=''
+ smtp_from:str=''; smtp_use_tls:bool=True
 settings=Settings()

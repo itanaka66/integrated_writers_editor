@@ -144,5 +144,9 @@ class UserOut(BaseModel):
     username:str; email:str|None=None; is_admin:bool; is_active:bool; created_at:datetime.datetime
     model_config=ConfigDict(from_attributes=True)
 class UserCreateRequest(BaseModel): username:str; password:str; is_admin:bool=False
-class UserUpdateRequest(BaseModel): is_admin:bool|None=None; is_active:bool|None=None
+class UserUpdateRequest(BaseModel): is_admin:bool|None=None; is_active:bool|None=None; email:str|None=None
 class PasswordChangeRequest(BaseModel): new_password:str
+class SelfPasswordChangeRequest(BaseModel): current_password:str; new_password:str
+class PasswordResetRequestIn(BaseModel): email:str
+class PasswordResetGenericOut(BaseModel): message:str
+class PasswordResetConfirmIn(BaseModel): token:str; new_password:str

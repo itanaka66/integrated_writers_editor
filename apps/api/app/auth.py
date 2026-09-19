@@ -41,17 +41,24 @@ def _build_auth_middleware():
         # reports everything disabled in that case).
         return make_auth_middleware(
             authenticate_basic=_authenticate,
-            public_paths=("/api/v1/health","/docs","/openapi.json","/redoc","/api/v1/auth/providers"),
+            public_paths=(
+                "/api/v1/health","/docs","/openapi.json","/redoc","/api/v1/auth/providers",
+                "/api/v1/auth/password-reset/request","/api/v1/auth/password-reset/confirm",
+            ),
         )
     return make_auth_middleware(
         authenticate_basic=_authenticate,
         verify_session=_verify_session,
-        # Only the login/callback/logout dance and the public provider-list
-        # endpoint are public — the redirect chain can't carry a session
-        # cookie on its first hop. /api/v1/auth/me stays protected: it's how
-        # the frontend detects an existing session, so it must 401 when
-        # there isn't one.
-        public_paths=("/api/v1/health","/docs","/openapi.json","/redoc","/api/v1/auth/providers","/api/v1/auth/logout"),
+        # Only the login/callback/logout dance, the public provider-list
+        # endpoint, and the password-reset request/confirm endpoints are
+        # public — a locked-out user has no session/credentials yet when
+        # calling those. /api/v1/auth/me stays protected: it's how the
+        # frontend detects an existing session, so it must 401 when there
+        # isn't one.
+        public_paths=(
+            "/api/v1/health","/docs","/openapi.json","/redoc","/api/v1/auth/providers","/api/v1/auth/logout",
+            "/api/v1/auth/password-reset/request","/api/v1/auth/password-reset/confirm",
+        ),
         public_path_prefixes=("/api/v1/auth/login","/api/v1/auth/callback"),
     )
 

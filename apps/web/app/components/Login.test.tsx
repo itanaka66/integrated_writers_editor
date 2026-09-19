@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Login from "./Login";
-import { api, ApiError, setAuth } from "../lib/api";
+import { api, ApiError, post, setAuth } from "../lib/api";
 
 vi.mock("../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api")>()),
   api: vi.fn(),
+  post: vi.fn(),
   setAuth: vi.fn(),
 }));
 
@@ -112,5 +113,17 @@ describe("Login", () => {
     fireEvent.click(screen.getByRole("button", { name: "GitHubでログイン" }));
     expect(window.location.href).toContain("/auth/login/github");
     Object.defineProperty(window, "location", { writable: true, value: originalLocation });
+  });
+
+  it("shows and submits the forgot-password form, displaying the generic confirmation", async () => {
+    vi.mocked(post).mockResolvedValue({ message: "ご入力いただいたメールアドレス宛に送信しました。" });
+    render(<Login onLoggedIn={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("パスワードをお忘れですか？"));
+    fireEvent.change(screen.getByPlaceholderText("登録済みのメールアドレス"), { target: { value: "user@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定メールを送信" }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/auth/password-reset/request", { email: "user@example.com" }));
+    await waitFor(() => expect(screen.getByText("ご入力いただいたメールアドレス宛に送信しました。")).toBeInTheDocument());
   });
 });

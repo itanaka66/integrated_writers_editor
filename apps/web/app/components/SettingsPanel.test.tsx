@@ -183,11 +183,16 @@ describe("SettingsPanel user management tab", () => {
     vi.mocked(put).mockReset();
   });
 
-  it("lists existing users and lets an admin add a new one", async () => {
+  function mockAsAdmin() {
     vi.mocked(api).mockImplementation((path: string) => {
       if (path === "/users") return Promise.resolve(users);
+      if (path === "/auth/me") return Promise.resolve({ username: "admin", is_admin: true, is_active: true, created_at: "2026-01-01T00:00:00Z" });
       return Promise.resolve(systemSettings);
     });
+  }
+
+  it("lists existing users and lets an admin add a new one", async () => {
+    mockAsAdmin();
     vi.mocked(post).mockResolvedValue({ username: "newbie", email: null, is_admin: false, is_active: true, created_at: "2026-01-03T00:00:00Z" });
     render(<SettingsPanel project={project} onSaved={() => {}} />);
 
@@ -202,10 +207,7 @@ describe("SettingsPanel user management tab", () => {
   });
 
   it("toggles admin/active flags via PUT", async () => {
-    vi.mocked(api).mockImplementation((path: string) => {
-      if (path === "/users") return Promise.resolve(users);
-      return Promise.resolve(systemSettings);
-    });
+    mockAsAdmin();
     vi.mocked(put).mockResolvedValue({ ...users[1], is_admin: true });
     render(<SettingsPanel project={project} onSaved={() => {}} />);
 
@@ -220,10 +222,7 @@ describe("SettingsPanel user management tab", () => {
   });
 
   it("disables deleting your own account", async () => {
-    vi.mocked(api).mockImplementation((path: string) => {
-      if (path === "/users") return Promise.resolve(users);
-      return Promise.resolve(systemSettings);
-    });
+    mockAsAdmin();
     localStorage.setItem("ns-auth", JSON.stringify({ u: "admin", pw: "x" }));
     render(<SettingsPanel project={project} onSaved={() => {}} />);
 
@@ -235,5 +234,82 @@ describe("SettingsPanel user management tab", () => {
     expect(deleteButton).toBeDisabled();
 
     localStorage.clear();
+  });
+
+  it("does not show the admin user-management section to a non-admin", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/auth/me") return Promise.resolve({ username: "member", is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" });
+      return Promise.resolve(systemSettings);
+    });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByPlaceholderText("現在のパスワード")).toBeInTheDocument());
+    expect(screen.queryByText("＋ ユーザーを追加")).not.toBeInTheDocument();
+  });
+});
+
+describe("SettingsPanel self password change", () => {
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+    vi.mocked(post).mockReset();
+  });
+
+  it("submits a password change and shows a confirmation", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/auth/me") return Promise.resolve({ username: "member", is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" });
+      return Promise.resolve(systemSettings);
+    });
+    vi.mocked(post).mockResolvedValue({ username: "member", email: null, is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByPlaceholderText("現在のパスワード")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("現在のパスワード"), { target: { value: "old-pw" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード"), { target: { value: "new-pw" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード（確認）"), { target: { value: "new-pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "パスワードを変更" }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/users/me/password", { current_password: "old-pw", new_password: "new-pw" }));
+    await waitFor(() => expect(screen.getByText("変更しました")).toBeInTheDocument());
+  });
+
+  it("shows an error when the confirmation does not match, without calling the API", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/auth/me") return Promise.resolve({ username: "member", is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" });
+      return Promise.resolve(systemSettings);
+    });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByPlaceholderText("現在のパスワード")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("現在のパスワード"), { target: { value: "old-pw" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード"), { target: { value: "new-pw" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード（確認）"), { target: { value: "mismatch" } });
+    fireEvent.click(screen.getByRole("button", { name: "パスワードを変更" }));
+
+    await waitFor(() => expect(screen.getByText("新しいパスワード（確認）が一致しません。")).toBeInTheDocument());
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("shows an error when the current password is wrong", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/auth/me") return Promise.resolve({ username: "member", is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" });
+      return Promise.resolve(systemSettings);
+    });
+    vi.mocked(post).mockRejectedValue(new Error("bad request"));
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByPlaceholderText("現在のパスワード")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("現在のパスワード"), { target: { value: "wrong" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード"), { target: { value: "new-pw" } });
+    fireEvent.change(screen.getByPlaceholderText("新しいパスワード（確認）"), { target: { value: "new-pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "パスワードを変更" }));
+
+    await waitFor(() => expect(screen.getByText("現在のパスワードが正しくありません。")).toBeInTheDocument());
   });
 });
