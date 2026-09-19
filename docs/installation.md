@@ -95,29 +95,51 @@ Using the same-origin relative path (`NEXT_PUBLIC_API_URL=/api/v1`) instead of t
 **Dashboard (recommended — no CLI commands to create/route the tunnel):**
 
 1. In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/), go to **Networks → Tunnels** (older UIs: **Access → Tunnels**) and **Create a tunnel**. Choose the **Cloudflared** connector type — this is the only option; ignore the separate Workers/Pages "template" gallery elsewhere in the Cloudflare dashboard, which is for a different product and unrelated to this.
-2. Name the tunnel and follow the displayed install command for your OS to install and connect `cloudflared` on the Docker host.
-3. On the **Public Hostname** tab, add two hostnames pointing at the same domain: one with **Path** `api/*` → service `http://localhost:8000`, and one with an empty path → service `http://localhost:3000`. Put the `api/*` rule above the catch-all one (Cloudflare evaluates them in order).
+2. Name the tunnel. On the install step, pick **Docker** from the environment dropdown instead of a host OS — this gives you a ready-made `docker run cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <your-token>` command with a token already filled in. Don't run it as-is; instead copy just the token and add this service to `docker-compose.yml` (or `docker-compose.release.yml`) alongside the existing `web`/`api` services, so the tunnel is managed by the same `docker compose` stack as everything else:
+   ```yaml
+   services:
+     # ... existing web, api, db, qdrant services ...
+     cloudflared:
+       image: cloudflare/cloudflared:latest
+       restart: unless-stopped
+       command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+       depends_on: [web, api]
+   ```
+   Put the token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN=...` rather than pasting it directly into the compose file, then start it with `docker compose up -d cloudflared`. This dashboard/token route needs no `~/.cloudflared/config.yml` on the host at all — the ingress rules from step 3 below live in Cloudflare's own dashboard instead.
+3. On the **Public Hostname** tab, add two hostnames pointing at the same domain: one with **Path** `api/*` → service `http://api:8000` (the container name, since `cloudflared` reaches other services over the compose network, not `localhost`), and one with an empty path → service `http://web:3000`. Put the `api/*` rule above the catch-all one (Cloudflare evaluates them in order).
 4. Apply the two `.env` settings from the table above (`docker compose up -d --build web` for `NEXT_PUBLIC_API_URL`, `docker compose up -d api` for `CORS_ORIGINS`).
 
-**CLI (if you prefer config files over the dashboard):**
+**CLI / Docker (config-file-based, if you'd rather manage ingress rules in a file than in the dashboard):**
 
-1. Install `cloudflared` on the Docker host (or run it as its own container — see Cloudflare's docs) and authenticate it to your account: `cloudflared tunnel login`.
-2. Create a named tunnel and route your domain to it: `cloudflared tunnel create ine` then `cloudflared tunnel route dns ine your-domain.example`.
-3. In the tunnel's config (`~/.cloudflared/config.yml`), add **ingress rules** that route by path to each service — this puts both `web` and `api` behind the one domain, the same way a reverse proxy would, without needing one:
+1. Authenticate a new tunnel from the Docker host once (this needs `cloudflared` installed locally just for this one step — a browser login, not something that runs long-term): `cloudflared tunnel login`, then `cloudflared tunnel create ine`, then `cloudflared tunnel route dns ine your-domain.example`. This writes credentials to `~/.cloudflared/<tunnel-id>.json` and prints the tunnel id.
+2. Write the ingress config to `~/.cloudflared/config.yml` — this puts both `web` and `api` behind the one domain, the same way a reverse proxy would, without needing one. Since this file will be mounted into a container, use the container network's service names (`api`, `web`), not `localhost`:
    ```yaml
    tunnel: <tunnel-id>
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   credentials-file: /etc/cloudflared/<tunnel-id>.json
    ingress:
      - hostname: your-domain.example
        path: ^/api/.*
-       service: http://localhost:8000
+       service: http://api:8000
      - hostname: your-domain.example
-       service: http://localhost:3000
+       service: http://web:3000
      - service: http_status:404
    ```
-4. Run it (`cloudflared tunnel run ine`, or install it as a system service per Cloudflare's docs), then apply the two `.env` settings from the table above the same way as the dashboard steps.
+3. Run `cloudflared` itself as a container on the same compose network, instead of installing it on the host — add this service to `docker-compose.yml` (or `docker-compose.release.yml`) alongside the existing `web`/`api` services:
+   ```yaml
+   services:
+     # ... existing web, api, db, qdrant services ...
+     cloudflared:
+       image: cloudflare/cloudflared:latest
+       restart: unless-stopped
+       command: tunnel --config /etc/cloudflared/config.yml run
+       volumes:
+         - ~/.cloudflared:/etc/cloudflared:ro
+       depends_on: [web, api]
+   ```
+   Then `docker compose up -d cloudflared` starts it — no `80`/`443`/`8000` port mappings are needed on `web`/`api` at all once this is your only path in, since `cloudflared` reaches them over the compose network directly by service name.
+4. Apply the two `.env` settings from the table above the same way as the dashboard steps.
 
-Either this or a self-hosted reverse proxy accomplish the same goal (one HTTPS domain, no exposed API port) — Cloudflare Tunnel avoids router configuration entirely at the cost of routing your traffic through Cloudflare; a self-hosted proxy keeps everything on your own infrastructure but needs `80`/`443` forwarded for certificate issuance.
+Either the dashboard flow (token-based, credentials generated for you) or the CLI flow (config-file-based, more control over ingress rules) work equally well run as a container this way — pick whichever matches how you'd rather manage the tunnel's config. Either this or a self-hosted reverse proxy accomplish the same goal (one HTTPS domain, no exposed API port) — Cloudflare Tunnel avoids router configuration entirely at the cost of routing your traffic through Cloudflare; a self-hosted proxy keeps everything on your own infrastructure but needs `80`/`443` forwarded for certificate issuance.
 
 ## 2b. Option A2 — Desktop installer (Windows / macOS)
 
