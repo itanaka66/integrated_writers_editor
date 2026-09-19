@@ -85,6 +85,7 @@ export default function WritePanel({ project }: { project: Project }) {
   const [diffTarget, setDiffTarget] = useState<{ before: string; after: string; readOnly: boolean } | null>(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [showProofread, setShowProofread] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showNewArticle, setShowNewArticle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -230,6 +231,33 @@ export default function WritePanel({ project }: { project: Project }) {
     setAi("");
   }
 
+  // Writes both an HTML and a plain-text representation of the current
+  // Markdown to the clipboard, so pasting into Word (or Gmail, Google Docs,
+  // etc.) keeps bold/headings/lists as real formatting instead of literal
+  // "**"/"##" characters — the plain-text form is the fallback for targets
+  // that only accept text (a chat box, a terminal).
+  async function copyForWord() {
+    if (!e) return;
+    const html = marked.parse(e.content || "", { async: false }) as string;
+    try {
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([e.content || ""], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(e.content || "");
+      }
+      setCopyStatus("コピーしました（Wordなどに貼り付けできます）");
+    } catch {
+      setCopyStatus("コピーに失敗しました。ブラウザのクリップボード権限をご確認ください。");
+    } finally {
+      setTimeout(() => setCopyStatus(null), 3000);
+    }
+  }
+
   const checklist = e ? [
     { label: "タイトルが入力されている", ok: !!e.title.trim() },
     { label: "概要（サマリー）が入力されている", ok: !!e.summary.trim() },
@@ -316,6 +344,8 @@ export default function WritePanel({ project }: { project: Project }) {
           {voice.supported && (
             <button className={voice.listening ? "on" : ""} onClick={voice.toggle} title="音声入力">{voice.listening ? "⏹ 停止" : "🎤 音声入力"}</button>
           )}
+          <button onClick={copyForWord} title="太字・見出しなどの書式を保ったまま、Wordなどに貼り付けられる形式でコピーします">📋 Wordにコピー</button>
+          {copyStatus && <span className="savedNote">{copyStatus}</span>}
           <span className="wordCount">{wordCount.toLocaleString()}文字</span>
         </div>
         {preview ? (
@@ -332,7 +362,7 @@ export default function WritePanel({ project }: { project: Project }) {
         <p className="context">Context Builder：本文、RAGを統合</p>
         <div className="actions">
           <button onClick={() => aiRun("summary")}>要約</button>
-          <button onClick={() => aiRun("proofread")}>校正</button>
+          <button onClick={() => setShowProofread(true)} title="スタイルガイドと照合し、差分を1件ずつ確認しながら修正します">校正</button>
         </div>
         <textarea className="instruction" value={inst} onChange={(x) => setInst(x.target.value)} placeholder="AIへの指示" />
         <div className="result"><small>AI RESULT</small><pre>{busy ? "AI処理中..." : ai || "結果がここに表示されます"}</pre></div>
