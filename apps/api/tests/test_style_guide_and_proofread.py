@@ -13,6 +13,56 @@ def test_style_guide_generate(client, project, monkeypatch):
     assert "である調" in r.json()["style_guide"]
 
 
+def test_style_guide_generate_with_category_adds_guidance(client, project, monkeypatch):
+    async def fake_generate(prompt, project_id=None):
+        assert "翻訳文書・ローカライズ" in prompt
+        assert "用語集的なルール" in prompt
+        return "・訳語を統一する", "test-model"
+
+    monkeypatch.setattr(main_module, "generate", fake_generate)
+
+    r = client.post(f"/api/v1/projects/{project['id']}/style-guide/generate", json={"category": "translation"})
+    assert r.status_code == 200, r.text
+    assert r.json()["style_guide"] == "・訳語を統一する"
+
+
+def test_style_guide_generate_academic_category_uses_citation_detail(client, project, monkeypatch):
+    async def fake_generate(prompt, project_id=None):
+        assert "MLA" in prompt
+        assert "APA" not in prompt
+        return "・MLA形式で統一する", "test-model"
+
+    monkeypatch.setattr(main_module, "generate", fake_generate)
+
+    r = client.post(
+        f"/api/v1/projects/{project['id']}/style-guide/generate",
+        json={"category": "academic", "detail": "MLA"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["style_guide"] == "・MLA形式で統一する"
+
+
+def test_style_guide_generate_academic_category_defaults_to_apa(client, project, monkeypatch):
+    async def fake_generate(prompt, project_id=None):
+        assert "APA形式" in prompt
+        return "ok", "test-model"
+
+    monkeypatch.setattr(main_module, "generate", fake_generate)
+
+    r = client.post(f"/api/v1/projects/{project['id']}/style-guide/generate", json={"category": "academic"})
+    assert r.status_code == 200, r.text
+
+
+def test_style_guide_generate_unknown_category_is_ignored(client, project, monkeypatch):
+    async def fake_generate(prompt, project_id=None):
+        return "ok", "test-model"
+
+    monkeypatch.setattr(main_module, "generate", fake_generate)
+
+    r = client.post(f"/api/v1/projects/{project['id']}/style-guide/generate", json={"category": "nonsense"})
+    assert r.status_code == 200, r.text
+
+
 def test_proofread_requires_style_guide(client, project):
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文です。"})
     episode = r.json()

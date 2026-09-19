@@ -43,6 +43,30 @@ function formatCost(v: number | null): string {
   return v === null ? "不明" : `$${v.toFixed(4)}`;
 }
 
+// A style guide is never required to write, but leaving it truly blank
+// means "文章校正" (proofread) has nothing to check against — this generic
+// baseline fills the field automatically the first time a project's
+// Settings screen loads with no style guide saved yet, so proofreading
+// always has *something* to work with. It's just a starting point in the
+// (unsaved) form; explicit "スタイルガイド生成" below replaces it with one
+// tailored to an actual use case, and either way nothing is written to the
+// project until 保存 is clicked.
+const DEFAULT_STYLE_GUIDE = [
+  "・文体は「ですます調」で統一する",
+  "・専門用語は初出時に簡単な説明を添える",
+  "・一文を短く区切り、読点を使いすぎない",
+  "・表記ゆれ（漢字/ひらがな/カタカナ）を統一する",
+  "・冗長な言い回しを避け、簡潔に書く",
+].join("\n");
+
+const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
+  { key: "translation", label: "翻訳文書・ローカライズ", hint: "複数の翻訳者が関わるため、表現や文体（です・ます調など）を揃えるために必要。" },
+  { key: "technical", label: "Webサイト・マニュアル・技術文書（テクニカルライティング）", hint: "読者が迷わないよう、専門用語の扱い、簡潔な表現、レイアウトを統一する。" },
+  { key: "academic", label: "学術論文・研究レポート", hint: "引用の形式や文献リストの書き方（APA、MLA、シカゴ・マニュアルなど）を統一するため。" },
+  { key: "pr", label: "広報・ニュース・プレスリリース", hint: "企業イメージや媒体の信頼性を保つため、用字用語のルール（記者ハンドブックなど）が必要。" },
+];
+const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
+
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
   const [tab, setTab] = useState<"basic" | "connection" | "usage" | "import" | "backup" | "export">("basic");
   const [usageSummary, setUsageSummary] = useState<AiUsageSummary | null>(null);
@@ -56,6 +80,14 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [styleGuideBusy, setStyleGuideBusy] = useState(false);
+  const [showStyleGuidePicker, setShowStyleGuidePicker] = useState(false);
+  const [pendingAcademic, setPendingAcademic] = useState(false);
+  const [academicDetail, setAcademicDetail] = useState(ACADEMIC_CITATION_STYLES[0]);
+
+  useEffect(() => {
+    if (tab !== "basic") return;
+    if (!project.style_guide && !form.style_guide) setForm((f) => ({ ...f, style_guide: DEFAULT_STYLE_GUIDE }));
+  }, [tab]);
   const [sys, setSys] = useState<SystemSettings | null>(null);
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
@@ -218,11 +250,13 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     } finally { setBusy(false); }
   }
 
-  async function generateStyleGuide() {
+  async function generateStyleGuide(category: string, detail?: string) {
     setStyleGuideBusy(true);
     try {
-      const { style_guide }: { style_guide: string } = await post(`/projects/${project.id}/style-guide/generate`, {});
+      const { style_guide }: { style_guide: string } = await post(`/projects/${project.id}/style-guide/generate`, { category, detail: detail || "" });
       setForm((f) => ({ ...f, style_guide }));
+      setShowStyleGuidePicker(false);
+      setPendingAcademic(false);
     } finally { setStyleGuideBusy(false); }
   }
 
@@ -249,14 +283,55 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
             <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder="「スタイルガイド生成」で作成するか、直接入力してください。" style={{ minHeight: 120 }} />
           </label>
           <div style={{ gridColumn: "1/-1" }}>
-            <button type="button" onClick={generateStyleGuide} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "📐 スタイルガイド生成"}</button>
+            <button type="button" onClick={() => setShowStyleGuidePicker(true)} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "📐 スタイルガイド生成"}</button>
           </div>
           <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-            既存の本文サンプルから、文体・表記の傾向を分析してスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。
+            用途に近い種類を選ぶと、既存の本文サンプルの文体・表記の傾向も踏まえて、より適したスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。
           </p>
           <div className="entityFormActions">
             <button onClick={save} disabled={busy}>{busy ? "保存中..." : "保存"}</button>
             {saved && <span className="savedNote">保存しました</span>}
+          </div>
+        </div>
+      )}
+      {showStyleGuidePicker && (
+        <div className="modalOverlay" onClick={() => { setShowStyleGuidePicker(false); setPendingAcademic(false); }}>
+          <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
+            <h1>スタイルガイドの種類を選択</h1>
+            <p style={{ color: "#687386", fontSize: 12 }}>用途に近いものを選んでください。</p>
+            {!pendingAcademic && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {STYLE_GUIDE_CATEGORIES.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    disabled={styleGuideBusy}
+                    onClick={() => (c.key === "academic" ? setPendingAcademic(true) : generateStyleGuide(c.key))}
+                    style={{ textAlign: "left" }}
+                  >
+                    <b>{c.label}</b>
+                    <div style={{ fontSize: 11, color: "#687386", fontWeight: "normal" }}>{c.hint}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {pendingAcademic && (
+              <>
+                <label>
+                  引用形式
+                  <select value={academicDetail} onChange={(e) => setAcademicDetail(e.target.value)}>
+                    {ACADEMIC_CITATION_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+                <div className="modalActions">
+                  <button type="button" onClick={() => setPendingAcademic(false)}>戻る</button>
+                  <button type="button" onClick={() => generateStyleGuide("academic", academicDetail)} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "この形式で生成する"}</button>
+                </div>
+              </>
+            )}
+            <div className="modalActions">
+              <button type="button" onClick={() => { setShowStyleGuidePicker(false); setPendingAcademic(false); }}>キャンセル</button>
+            </div>
           </div>
         </div>
       )}
