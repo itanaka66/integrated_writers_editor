@@ -1,11 +1,13 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import { api, post, put, del, streamSSE } from "../lib/api";
 import { Episode, Project, Source, Template } from "../lib/types";
 import { useVoiceInput } from "../lib/useVoiceInput";
+import { useResizableWidth } from "../lib/useResizableWidth";
 import DiffView from "./DiffView";
 import ProofreadPanel from "./ProofreadPanel";
+import Resizer from "./Resizer";
 
 type Tool = {
   key: string;
@@ -90,6 +92,8 @@ export default function WritePanel({ project }: { project: Project }) {
   const [showNewArticle, setShowNewArticle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newTemplateId, setNewTemplateId] = useState<number | "">("");
+  const leftPanel = useResizableWidth("ine-write-left-width", { defaultWidth: 190, min: 140, max: 320, direction: "left" });
+  const rightPanel = useResizableWidth("ine-write-right-width", { defaultWidth: 280, min: 220, max: 460, direction: "right" });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const voice = useVoiceInput((text) => {
     if (!e) return;
@@ -288,13 +292,17 @@ export default function WritePanel({ project }: { project: Project }) {
   if (!e) return <div className="panel"><p>記事がまだありません。</p><button className="add" onClick={openNewArticle}>＋ 記事を追加</button>{newArticleModal}</div>;
 
   return (
-    <div className="writeLayout">
+    <div
+      className="writeLayout"
+      style={{ "--writeLeftW": `${leftPanel.width}px`, "--writeRightW": `${rightPanel.width}px` } as CSSProperties}
+    >
       <aside className="writeEpisodeList">
         <div className="section">ARTICLES</div>
         <div className="episodes">
           {es.map((x) => <button className={e.id === x.id ? "ep active" : "ep"} onClick={() => setE(x)} key={x.id}>{x.title}</button>)}
         </div>
         <button className="newEpisode" onClick={openNewArticle}>＋ 新規記事</button>
+        <Resizer side="right" onPointerDown={leftPanel.startDrag} />
       </aside>
       <section className="main">
         <div className="aiToolbar">
@@ -358,6 +366,7 @@ export default function WritePanel({ project }: { project: Project }) {
         )}
       </section>
       <aside className="right">
+        <Resizer side="left" onPointerDown={rightPanel.startDrag} />
         <b>AI EDITOR</b>
         <p className="context">Context Builder：本文、RAGを統合</p>
         <div className="actions">

@@ -1,4 +1,5 @@
 "use client";
+import { ReactNode } from "react";
 import { Project } from "../lib/types";
 import { clearAuth } from "../lib/api";
 
@@ -13,8 +14,8 @@ const NAV: { key: Section; label: string }[] = [
   { key: "settings", label: "⚙ 設定" },
 ];
 
-export default function Sidebar({ project, section, onSection, onDashboard }: {
-  project: Project; section: Section; onSection: (s: Section) => void; onDashboard: () => void;
+export default function Sidebar({ project, section, onSection, onDashboard, resizer }: {
+  project: Project; section: Section; onSection: (s: Section) => void; onDashboard: () => void; resizer?: ReactNode;
 }) {
   return (
     <aside className="appSidebar">
@@ -27,6 +28,7 @@ export default function Sidebar({ project, section, onSection, onDashboard }: {
         ))}
       </div>
       <button className="appSidebarLogout" onClick={() => { clearAuth(); window.location.reload(); }}>⏻ ログアウト</button>
+      {resizer}
     </aside>
   );
 }
