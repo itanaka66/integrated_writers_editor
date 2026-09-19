@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SettingsPanel from "./SettingsPanel";
-import { api, put } from "../lib/api";
+import { api, post, put } from "../lib/api";
 import { Project } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
@@ -75,6 +75,54 @@ describe("SettingsPanel AI provider section", () => {
     await waitFor(() => expect(put).toHaveBeenCalled());
     const body = vi.mocked(put).mock.calls[0][1] as Record<string, unknown>;
     expect(body.anthropic_api_key).toBe("sk-ant-newkey");
+  });
+});
+
+describe("SettingsPanel style guide", () => {
+  beforeEach(() => {
+    vi.mocked(post).mockReset();
+    vi.mocked(put).mockReset();
+  });
+
+  it("prefills a default style guide when the project has none, without persisting it", async () => {
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+    const textarea = screen.getByPlaceholderText("「スタイルガイド生成」で作成するか、直接入力してください。") as HTMLTextAreaElement;
+    expect(textarea.value).toContain("ですます調");
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite an existing style guide with the default", () => {
+    render(<SettingsPanel project={{ ...project, style_guide: "・独自ルール" }} onSaved={() => {}} />);
+    expect(screen.getByPlaceholderText("「スタイルガイド生成」で作成するか、直接入力してください。")).toHaveValue("・独自ルール");
+  });
+
+  it("asks for a citation style before generating an academic-category guide", async () => {
+    vi.mocked(post).mockResolvedValue({ style_guide: "・MLA形式で統一する" });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("📐 スタイルガイド生成"));
+    fireEvent.click(await screen.findByText("学術論文・研究レポート"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "MLA" } });
+    fireEvent.click(screen.getByText("この形式で生成する"));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      `/projects/${project.id}/style-guide/generate`,
+      { category: "academic", detail: "MLA" },
+    ));
+    await waitFor(() => expect(screen.getByPlaceholderText("「スタイルガイド生成」で作成するか、直接入力してください。")).toHaveValue("・MLA形式で統一する"));
+  });
+
+  it("generates directly for a non-academic category with no extra step", async () => {
+    vi.mocked(post).mockResolvedValue({ style_guide: "・訳語を統一する" });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("📐 スタイルガイド生成"));
+    fireEvent.click(await screen.findByText("翻訳文書・ローカライズ"));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      `/projects/${project.id}/style-guide/generate`,
+      { category: "translation", detail: "" },
+    ));
   });
 });
 

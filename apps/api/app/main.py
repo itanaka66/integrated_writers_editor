@@ -98,12 +98,25 @@ def project(pid:int,db:Session=Depends(get_db)):
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
 @app.put('/api/v1/projects/{pid}',response_model=ProjectOut)
 def project_put(pid:int,x:ProjectUpdate,db:Session=Depends(get_db)):return crud_update(db,Project,pid,x,'Project')
+# Broad style-guide categories a user picks from before generating one (see
+# SettingsPanel.tsx's category picker) — each maps to guidance appended to
+# the generation prompt so the result actually fits the intended use case,
+# rather than one generic "readable Japanese" style guide for everyone.
+STYLE_GUIDE_CATEGORY_GUIDANCE={
+ 'translation':'この文書は複数の翻訳者が関わる翻訳文書・ローカライズ文書です。訳語・言い回しを翻訳者間で統一するための用語集的なルール、一貫した文体（です・ます調かである調か）、一貫した敬語レベルを特に重視してください。',
+ 'technical':'この文書はWebサイト・マニュアル・技術文書（テクニカルライティング）です。読者が迷わないよう、専門用語の扱い方の統一、簡潔で明確な表現、見出し・箇条書きなどレイアウトの一貫性を特に重視してください。',
+ 'academic':'この文書は学術論文・研究レポートです。引用の形式や文献リストの書き方は{detail}に統一し、客観的で厳密な文体、専門用語の正確な使用を特に重視してください。',
+ 'pr':'この文書は広報・ニュース・プレスリリースです。企業イメージや媒体としての信頼性を保つため、用字用語のルール（記者ハンドブック的な統一基準）と、簡潔かつ正確に事実を伝える文体を特に重視してください。',
+}
 @app.post('/api/v1/projects/{pid}/style-guide/generate',response_model=StyleGuideOut)
-async def style_guide_generate(pid:int,db:Session=Depends(get_db)):
+async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGenerateRequest(),db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
  sample='\n\n'.join(e.content for e in eps[:5] if e.content).strip()[:6000]
- prompt=f'''あなたは日本語の編集者です。以下は記事プロジェクト「{p.name}」の既存本文サンプルです。この文章の文体・表記に沿ったスタイルガイドを、次の観点を含めて箇条書きで作成してください：文体（である調/ですます調）、語彙・言い回しの傾向、句読点の使い方、表記ゆれ（漢字/ひらがな/カタカナの使い分けなど）、避けるべき表現。スタイルガイド本文のみを出力し、前置きや締めの言葉は不要です。
+ guidance=STYLE_GUIDE_CATEGORY_GUIDANCE.get(x.category,'')
+ if guidance:guidance=guidance.format(detail=x.detail or 'APA形式')+'\n'
+ prompt=f'''あなたは日本語の編集者です。以下は記事プロジェクト「{p.name}」の既存本文サンプルです。この文章の文体・表記に沿ったスタイルガイドを、次の観点を含めて箇条書きで作成してください：文体（である調/ですます調）、語彙・言い回しの傾向、句読点の使い方、表記ゆれ（漢字/ひらがな/カタカナの使い分けなど）、避けるべき表現。
+{guidance}スタイルガイド本文のみを出力し、前置きや締めの言葉は不要です。
 
 本文サンプル:
 {sample or "（まだ本文がありません。一般的で読みやすい日本語のスタイルガイドを提案してください。）"}'''

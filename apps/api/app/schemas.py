@@ -3,6 +3,7 @@ class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rule
 class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes=True)
 class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; style_guide:str|None=None
 class StyleGuideOut(BaseModel): style_guide:str
+class StyleGuideGenerateRequest(BaseModel): category:str=''; detail:str=''
 class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''
 class ProofreadResult(BaseModel): diffs:list[ProofreadDiff]
 class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''

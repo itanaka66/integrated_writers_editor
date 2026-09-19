@@ -212,6 +212,19 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleGuideGenerateRequest",
+                "default": {
+                  "category": "",
+                  "detail": ""
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3278,6 +3291,22 @@
         },
         "type": "object",
         "title": "SourceUpdate"
+      },
+      "StyleGuideGenerateRequest": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": ""
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "StyleGuideGenerateRequest"
       },
       "StyleGuideOut": {
         "properties": {
