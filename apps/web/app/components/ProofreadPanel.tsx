@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { post } from "../lib/api";
 
 type Diff = { original: string; suggested: string; reason: string };
@@ -25,20 +25,36 @@ export default function ProofreadPanel({
   const [index, setIndex] = useState(0);
   const [working, setWorking] = useState(content);
   const [error, setError] = useState("");
+  // Snapshot the content at open time, in a ref rather than a dependency —
+  // this must check what's on screen right now (including unsaved edits),
+  // but must not re-run mid-check if the textarea changes while the panel
+  // is still open.
+  const checkedContent = useRef(content);
 
   useEffect(() => {
     let cancelled = false;
+    // A cold Cloudflare Tunnel/proxy connection right after a deploy has
+    // been observed to drop the very first request through it, well before
+    // this ever reaches the app; one silent retry absorbs that one-off
+    // without bothering the user with an error for something that
+    // succeeds a moment later on its own. Loading stays shown across both
+    // attempts — only a second failure surfaces as an error.
     (async () => {
-      try {
-        const r: { diffs: Diff[] } = await post(`/episodes/${episodeId}/proofread`, {});
-        if (!cancelled) setDiffs(r.diffs);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "校正に失敗しました。");
-      } finally {
-        if (!cancelled) setLoading(false);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r: { diffs: Diff[] } = await post(`/episodes/${episodeId}/proofread`, { content: checkedContent.current });
+          if (!cancelled) setDiffs(r.diffs);
+          break;
+        } catch (err) {
+          if (cancelled) return;
+          if (attempt === 1) setError(err instanceof Error ? err.message : "校正に失敗しました。");
+        }
       }
+      if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- checkedContent
+    // is a ref snapshot taken once at open time, intentionally not re-read
   }, [episodeId]);
 
   const current = diffs[index];

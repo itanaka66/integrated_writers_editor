@@ -6,6 +6,11 @@ class StyleGuideOut(BaseModel): style_guide:str
 class StyleGuideGenerateRequest(BaseModel): category:str=''; detail:str=''
 class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''
 class ProofreadResult(BaseModel): diffs:list[ProofreadDiff]
+# content lets the caller check unsaved editor content instead of what's in
+# the database — the write screen sends its current (possibly-unsaved)
+# textarea value here so 校正 always reflects what's on screen, not the
+# last-saved version.
+class ProofreadRequest(BaseModel): content:str|None=None
 class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
