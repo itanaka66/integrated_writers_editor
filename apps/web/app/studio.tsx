@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { api, clearAuth, getAuth, setUnauthorizedHandler } from "./lib/api";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
@@ -11,6 +11,8 @@ import MaterialsPanel from "./components/MaterialsPanel";
 import SearchPanel from "./components/SearchPanel";
 import ChatPanel from "./components/ChatPanel";
 import SettingsPanel from "./components/SettingsPanel";
+import Resizer from "./components/Resizer";
+import { useResizableWidth } from "./lib/useResizableWidth";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -38,11 +40,15 @@ function Workspace() {
   const [project, setProject] = useState<Project | null>(null);
   const [section, setSection] = useState<Section>("home");
 
+  const sidebar = useResizableWidth("ine-sidebar-width", { defaultWidth: 200, min: 160, max: 340, direction: "left" });
   if (!project) return <Dashboard onOpen={(p) => { setProject(p); setSection("home"); }} />;
 
   return (
-    <div className="appShell">
-      <Sidebar project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)} />
+    <div className="appShell" style={{ "--sidebarW": `${sidebar.width}px` } as CSSProperties}>
+      <Sidebar
+        project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)}
+        resizer={<Resizer side="right" onPointerDown={sidebar.startDrag} />}
+      />
       <main className="appMain">
         {section === "home" && <ProjectHome project={project} onSection={setSection} />}
         {section === "write" && <WritePanel project={project} />}
