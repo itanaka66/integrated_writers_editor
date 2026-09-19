@@ -14,7 +14,7 @@ const ICONS: { key: Section; label: string }[] = [
 
 export default function ProjectHome({ project, onSection }: { project: Project; onSection: (s: Section) => void }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes); }, [project.id]);
+  useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes).catch(() => {}); }, [project.id]);
   const recent = [...episodes].sort((a, b) => b.number - a.number).slice(0, 5);
   const totalChars = episodes.reduce((sum, e) => sum + (e.content || "").replace(/\s/g, "").length, 0);
   const avgChars = episodes.length ? Math.round(totalChars / episodes.length) : 0;

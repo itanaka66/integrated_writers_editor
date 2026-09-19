@@ -34,6 +34,14 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export async function api(path: string, opts?: RequestInit) {
   const auth = getAuth();
   const headers = new Headers(opts?.headers);
@@ -44,6 +52,14 @@ export async function api(path: string, opts?: RequestInit) {
     throw new Error("unauthorized");
   }
   if (r.status === 204) return null;
+  if (!r.ok) {
+    // A non-2xx, non-401 response (e.g. 429 from the login lockout guard, or
+    // a 5xx) is not JSON shaped like the caller expects — returning it as
+    // data used to make callers crash on .map()/.find() over an error body
+    // instead of surfacing a message. Throw instead so every call site's
+    // existing error handling (or the fallback below) takes over.
+    throw new ApiError(r.status, `request failed: ${r.status}`);
+  }
   return r.json();
 }
 export async function post(p: string, b: unknown) {

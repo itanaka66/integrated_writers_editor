@@ -105,7 +105,7 @@ export default function WritePanel({ project }: { project: Project }) {
     setE(d[0] || null);
   }
   useEffect(() => { load(); }, [project.id]);
-  useEffect(() => { api(`/projects/${project.id}/templates`).then(setTemplates); }, [project.id]);
+  useEffect(() => { api(`/projects/${project.id}/templates`).then(setTemplates).catch(() => {}); }, [project.id]);
 
   async function loadSources(episodeId: number) {
     setSources(await api(`/episodes/${episodeId}/sources`));
