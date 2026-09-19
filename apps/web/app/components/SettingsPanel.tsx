@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, downloadFile, post, postFile, put } from "../lib/api";
+import { api, del, downloadFile, getAuth, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { ensureNotificationPermission, notify } from "../lib/notify";
 
@@ -35,6 +35,8 @@ const AI_PROVIDERS = [
   { value: "google", label: "Gemini（Google）" },
 ];
 
+type UserAccount = { username: string; email: string | null; is_admin: boolean; is_active: boolean; created_at: string };
+
 type AiUsageSummaryRow = { provider: string; model: string; calls: number; input_tokens: number; output_tokens: number; estimated_cost_usd: number | null };
 type AiUsageSummary = { rows: AiUsageSummaryRow[]; total_calls: number; total_input_tokens: number; total_output_tokens: number; total_estimated_cost_usd: number | null };
 type AiUsageLogRow = { id: number; project_id: number | null; provider: string; model: string; input_tokens: number | null; output_tokens: number | null; estimated_cost_usd: number | null; created_at: string };
@@ -68,7 +70,7 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "connection" | "usage" | "import" | "backup" | "export">("basic");
+  const [tab, setTab] = useState<"basic" | "connection" | "usage" | "users" | "import" | "backup" | "export">("basic");
   const [usageSummary, setUsageSummary] = useState<AiUsageSummary | null>(null);
   const [usageRecent, setUsageRecent] = useState<AiUsageLogRow[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -170,6 +172,78 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     api("/ai-usage/recent?limit=50").then(setUsageRecent).catch(() => {});
   }, [tab]);
 
+  useEffect(() => {
+    if (tab !== "users") return;
+    loadUsers();
+  }, [tab]);
+
+  const currentUsername = getAuth()?.u ?? "";
+  const [users, setUsers] = useState<UserAccount[] | null>(null);
+  const [usersError, setUsersError] = useState("");
+  const [newUser, setNewUser] = useState({ username: "", password: "", is_admin: false });
+  const [userBusy, setUserBusy] = useState(false);
+  const [resetPasswordFor, setResetPasswordFor] = useState<string | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+
+  function loadUsers() {
+    setUsersError("");
+    api("/users").then(setUsers).catch(() => setUsersError("ユーザー一覧の読み込みに失敗しました。管理者権限が必要です。"));
+  }
+
+  async function createNewUser() {
+    if (!newUser.username.trim() || !newUser.password) return;
+    setUserBusy(true); setUsersError("");
+    try {
+      await post("/users", newUser);
+      setNewUser({ username: "", password: "", is_admin: false });
+      loadUsers();
+    } catch {
+      setUsersError("ユーザーの追加に失敗しました。ユーザー名が既に使われている可能性があります。");
+    } finally { setUserBusy(false); }
+  }
+
+  async function setUserActive(username: string, is_active: boolean) {
+    setUsersError("");
+    try {
+      await put(`/users/${encodeURIComponent(username)}`, { is_active });
+      loadUsers();
+    } catch {
+      setUsersError("更新に失敗しました。唯一の有効な管理者を無効化することはできません。");
+    }
+  }
+
+  async function setUserAdmin(username: string, is_admin: boolean) {
+    setUsersError("");
+    try {
+      await put(`/users/${encodeURIComponent(username)}`, { is_admin });
+      loadUsers();
+    } catch {
+      setUsersError("更新に失敗しました。唯一の管理者を降格することはできません。");
+    }
+  }
+
+  async function submitPasswordReset(username: string) {
+    if (!resetPasswordValue) return;
+    setUsersError("");
+    try {
+      await post(`/users/${encodeURIComponent(username)}/password`, { new_password: resetPasswordValue });
+      setResetPasswordFor(null); setResetPasswordValue("");
+    } catch {
+      setUsersError("パスワードの変更に失敗しました。");
+    }
+  }
+
+  async function deleteUserAccount(username: string) {
+    if (!window.confirm(`ユーザー「${username}」を削除しますか？この操作は取り消せません。`)) return;
+    setUsersError("");
+    try {
+      await del(`/users/${encodeURIComponent(username)}`);
+      loadUsers();
+    } catch {
+      setUsersError("削除に失敗しました。");
+    }
+  }
+
   function applySettingsResponse(s: SystemSettings) {
     setSys(s);
     setSysForm({
@@ -268,6 +342,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>基本設定</button>
         <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
         <button className={tab === "usage" ? "on" : ""} onClick={() => setTab("usage")}>使用状況</button>
+        <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>ユーザー管理</button>
         <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>インポート</button>
         <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>バックアップ</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
@@ -490,6 +565,73 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                     </p>
                   </div>
                 ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {tab === "users" && (
+        <div style={{ marginTop: 14 }}>
+          {usersError && <p className="errorNote">{usersError}</p>}
+          {!users && !usersError && <p>読み込み中...</p>}
+          {users && (
+            <>
+              <div className="stateTable">
+                {users.map((u) => {
+                  const isSelf = u.username === currentUsername;
+                  return (
+                    <div className="stateRow" key={u.username} style={{ gridTemplateColumns: "1fr 90px 90px 1fr 130px" }}>
+                      <span><b>{u.username}</b>{isSelf && <small style={{ color: "#687386" }}>（自分）</small>}</span>
+                      <span>
+                        <label>
+                          <input type="checkbox" checked={u.is_admin} onChange={(e) => setUserAdmin(u.username, e.target.checked)} /> 管理者
+                        </label>
+                      </span>
+                      <span>
+                        <label>
+                          <input type="checkbox" checked={u.is_active} onChange={(e) => setUserActive(u.username, e.target.checked)} /> 有効
+                        </label>
+                      </span>
+                      <span>
+                        {resetPasswordFor === u.username ? (
+                          <span style={{ display: "flex", gap: 6 }}>
+                            <input
+                              type="password" placeholder="新しいパスワード" value={resetPasswordValue}
+                              onChange={(e) => setResetPasswordValue(e.target.value)}
+                            />
+                            <button onClick={() => submitPasswordReset(u.username)}>変更</button>
+                            <button onClick={() => { setResetPasswordFor(null); setResetPasswordValue(""); }}>キャンセル</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => { setResetPasswordFor(u.username); setResetPasswordValue(""); }}>パスワード変更</button>
+                        )}
+                      </span>
+                      <span>
+                        <button onClick={() => deleteUserAccount(u.username)} disabled={isSelf} title={isSelf ? "自分自身は削除できません" : ""}>削除</button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="entityForm" style={{ marginTop: 20 }}>
+                <small>新規ユーザーを追加</small>
+                <input
+                  placeholder="ユーザー名" value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                />
+                <input
+                  type="password" placeholder="パスワード" value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                />
+                <label>
+                  <input
+                    type="checkbox" checked={newUser.is_admin}
+                    onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
+                  /> 管理者権限を付与する
+                </label>
+                <button onClick={createNewUser} disabled={userBusy || !newUser.username.trim() || !newUser.password}>
+                  {userBusy ? "追加中..." : "＋ ユーザーを追加"}
+                </button>
               </div>
             </>
           )}

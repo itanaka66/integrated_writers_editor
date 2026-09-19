@@ -4,11 +4,13 @@ import SettingsPanel from "./SettingsPanel";
 import { api, post, put } from "../lib/api";
 import { Project } from "../lib/types";
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   api: vi.fn(),
   post: vi.fn(),
   postFile: vi.fn(),
   put: vi.fn(),
+  del: vi.fn(),
   downloadFile: vi.fn(),
 }));
 
@@ -166,5 +168,72 @@ describe("SettingsPanel usage tab", () => {
     fireEvent.click(screen.getByText("使用状況"));
     await waitFor(() => expect(screen.getByText("some-future-model")).toBeInTheDocument());
     expect(screen.getAllByText("不明").length).toBeGreaterThan(0);
+  });
+});
+
+describe("SettingsPanel user management tab", () => {
+  const users = [
+    { username: "admin", email: null, is_admin: true, is_active: true, created_at: "2026-01-01T00:00:00Z" },
+    { username: "member", email: null, is_admin: false, is_active: true, created_at: "2026-01-02T00:00:00Z" },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+    vi.mocked(post).mockReset();
+    vi.mocked(put).mockReset();
+  });
+
+  it("lists existing users and lets an admin add a new one", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/users") return Promise.resolve(users);
+      return Promise.resolve(systemSettings);
+    });
+    vi.mocked(post).mockResolvedValue({ username: "newbie", email: null, is_admin: false, is_active: true, created_at: "2026-01-03T00:00:00Z" });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByText("member")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "newbie" } });
+    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "pw123456" } });
+    fireEvent.click(screen.getByText("＋ ユーザーを追加"));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/users", { username: "newbie", password: "pw123456", is_admin: false }));
+  });
+
+  it("toggles admin/active flags via PUT", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/users") return Promise.resolve(users);
+      return Promise.resolve(systemSettings);
+    });
+    vi.mocked(put).mockResolvedValue({ ...users[1], is_admin: true });
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByText("member")).toBeInTheDocument());
+
+    const memberRow = screen.getByText("member").closest(".stateRow") as HTMLElement;
+    const adminCheckbox = memberRow.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    fireEvent.click(adminCheckbox);
+
+    await waitFor(() => expect(put).toHaveBeenCalledWith("/users/member", { is_admin: true }));
+  });
+
+  it("disables deleting your own account", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path === "/users") return Promise.resolve(users);
+      return Promise.resolve(systemSettings);
+    });
+    localStorage.setItem("ns-auth", JSON.stringify({ u: "admin", pw: "x" }));
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("ユーザー管理"));
+    await waitFor(() => expect(screen.getByText("admin")).toBeInTheDocument());
+
+    const adminRow = screen.getByText("admin").closest(".stateRow") as HTMLElement;
+    const deleteButton = Array.from(adminRow.querySelectorAll("button")).find((b) => b.textContent === "削除") as HTMLButtonElement;
+    expect(deleteButton).toBeDisabled();
+
+    localStorage.clear();
   });
 });

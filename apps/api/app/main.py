@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Form
+from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Form,Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -24,7 +24,10 @@ from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
 from . import materials
-from editor_common.users import ensure_bootstrap_user
+from editor_common.users import (
+ ensure_bootstrap_user,list_users,create_user,change_password,set_active,delete_user,
+ UsernameTakenError,UserNotFoundError,
+)
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='writers-studio-change-me':
@@ -202,6 +205,60 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
   return Response(export_mod.build_epub(p,eps,sources_by_episode),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
  raise HTTPException(400,'format must be one of: txt, md, epub')
 
+def get_current_user(request:Request,db:Session=Depends(get_db))->User:
+ # BasicAuthMiddleware (app/auth.py) sets this on every authenticated
+ # request; a missing value here would mean the middleware let something
+ # through without authenticating it, which should never happen.
+ username=getattr(request.state,'username',None)
+ user=db.scalar(select(User).where(User.username==username)) if username else None
+ if user is None:raise HTTPException(401,'Not authenticated')
+ return user
+def require_admin(user:User=Depends(get_current_user))->User:
+ if not user.is_admin:raise HTTPException(403,'管理者権限が必要です。')
+ return user
+def _user_out(u):return UserOut.model_validate(u)
+def _other_active_admins_remain(db,excluding_username:str)->bool:
+ return db.scalar(select(User.id).where(User.is_admin,User.is_active,User.username!=excluding_username).limit(1)) is not None
+@app.get('/api/v1/users',response_model=list[UserOut])
+def users_list(db:Session=Depends(get_db),_admin:User=Depends(require_admin)):
+ return [_user_out(u) for u in list_users(db,User)]
+@app.post('/api/v1/users',response_model=UserOut)
+def users_create(x:UserCreateRequest,db:Session=Depends(get_db),_admin:User=Depends(require_admin)):
+ try:
+  u=create_user(db,User,x.username,x.password,is_admin=x.is_admin)
+ except UsernameTakenError as e:
+  raise HTTPException(409,str(e))
+ except ValueError as e:
+  raise HTTPException(400,str(e))
+ return _user_out(u)
+@app.put('/api/v1/users/{username}',response_model=UserOut)
+def users_update(username:str,x:UserUpdateRequest,db:Session=Depends(get_db),admin:User=Depends(require_admin)):
+ u=db.scalar(select(User).where(User.username==username))
+ if u is None:raise HTTPException(404,'ユーザーが見つかりません。')
+ demoting=x.is_admin is False and u.is_admin
+ deactivating=x.is_active is False and u.is_active
+ if (demoting or deactivating) and u.username==admin.username and not _other_active_admins_remain(db,u.username):
+  raise HTTPException(400,'唯一の有効な管理者アカウントを降格・無効化することはできません。')
+ if x.is_admin is not None:u.is_admin=x.is_admin
+ if x.is_active is not None:u.is_active=x.is_active
+ db.commit();db.refresh(u)
+ return _user_out(u)
+@app.post('/api/v1/users/{username}/password',response_model=UserOut)
+def users_change_password(username:str,x:PasswordChangeRequest,db:Session=Depends(get_db),_admin:User=Depends(require_admin)):
+ try:
+  change_password(db,User,username,x.new_password)
+ except UserNotFoundError as e:
+  raise HTTPException(404,str(e))
+ except ValueError as e:
+  raise HTTPException(400,str(e))
+ return _user_out(db.scalar(select(User).where(User.username==username)))
+@app.delete('/api/v1/users/{username}',status_code=204)
+def users_delete(username:str,db:Session=Depends(get_db),admin:User=Depends(require_admin)):
+ u=db.scalar(select(User).where(User.username==username))
+ if u is None:raise HTTPException(404,'ユーザーが見つかりません。')
+ if u.username==admin.username:
+  raise HTTPException(400,'自分自身のアカウントは削除できません。')
+ delete_user(db,User,username)
 def _system_settings_out(db):
  row=db.get(RuntimeConfig,rc.SINGLETON_ID)
  cfg=rc.get_effective_config(db)
