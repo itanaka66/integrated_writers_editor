@@ -1,3 +1,5 @@
+import json
+
 from app import main as main_module
 
 
@@ -128,3 +130,62 @@ def test_proofread_empty_diffs_when_no_changes_needed(client, project, monkeypat
     r = client.post(f"/api/v1/episodes/{episode['id']}/proofread")
     assert r.status_code == 200, r.text
     assert r.json()["diffs"] == []
+
+
+def test_proofread_stream_sends_deltas_then_diffs(client, project, monkeypatch):
+    # A slow, buffered proofread response was observed to trip an
+    # intermediate proxy's idle timeout (Cloudflare Tunnel returning a 504
+    # before the model finished) — streaming keeps bytes flowing
+    # throughout generation instead of going silent until the whole
+    # response is ready.
+    client.put(f"/api/v1/projects/{project['id']}", json={"style_guide": "である調で統一する"})
+    r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "今日は良い天気です。"})
+    episode = r.json()
+
+    async def fake_generate_stream(prompt, project_id=None):
+        assert "である調で統一する" in prompt
+        yield {"delta": '[{"original": "です。", '}
+        yield {"delta": '"suggested": "である。", "reason": "である調に統一"}]'}
+        yield {"done": True, "model": "stub-model"}
+
+    monkeypatch.setattr(main_module, "generate_stream", fake_generate_stream)
+
+    with client.stream("POST", f"/api/v1/episodes/{episode['id']}/proofread/stream", json={}) as r:
+        assert r.status_code == 200
+        events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+
+    assert events[0] == {"delta": '[{"original": "です。", '}
+    assert events[1] == {"delta": '"suggested": "である。", "reason": "である調に統一"}]'}
+    assert events[2]["done"] is True
+    assert events[2]["diffs"] == [{"original": "です。", "suggested": "である。", "reason": "である調に統一"}]
+
+
+def test_proofread_stream_reports_provider_errors_as_an_event(client, project):
+    from app.providers import ProviderError
+
+    client.put(f"/api/v1/projects/{project['id']}", json={"style_guide": "である調で統一する"})
+    r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文"})
+    episode = r.json()
+
+    async def fake_generate_stream(prompt, project_id=None):
+        raise ProviderError("APIキーが未設定です")
+        yield  # pragma: no cover - unreachable, keeps this an async generator
+
+    orig = main_module.generate_stream
+    main_module.generate_stream = fake_generate_stream
+    try:
+        with client.stream("POST", f"/api/v1/episodes/{episode['id']}/proofread/stream", json={}) as r:
+            assert r.status_code == 200
+            events = [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+    finally:
+        main_module.generate_stream = orig
+
+    assert events == [{"error": "APIキーが未設定です"}]
+
+
+def test_proofread_stream_requires_style_guide(client, project):
+    r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文"})
+    episode = r.json()
+
+    r = client.post(f"/api/v1/episodes/{episode['id']}/proofread/stream", json={})
+    assert r.status_code == 400

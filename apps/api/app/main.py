@@ -124,31 +124,62 @@ async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGen
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return StyleGuideOut(style_guide=t.strip())
-@app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
-async def episode_proofread(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
- e=crud_get_or_404(db,Episode,eid,'Episode')
- p=db.get(Project,e.project_id)
- if not (p.style_guide or '').strip():raise HTTPException(400,'スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。')
- content=x.content if x.content is not None else e.content
- prompt=f'''あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。
+def _proofread_prompt(style_guide,content):
+ return f'''あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。
 
 スタイルガイド:
-{p.style_guide}
+{style_guide}
 
 本文:
 {content}
 
 出力は必ず次のJSON配列のみとし、他の説明文は一切含めないでください。修正不要なら空配列 [] を返してください。
 [{{"original": "本文中に完全一致する修正対象の原文", "suggested": "修正後の文字列", "reason": "修正理由（簡潔に）"}}]'''
- try:t,m=await generate(prompt,e.project_id)
- except ProviderError as ex:raise HTTPException(400,str(ex))
- except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
+def _parse_proofread_diffs(t,content):
  match=re.search(r'\[.*\]',t,re.DOTALL)
  try:raw=json.loads(match.group(0) if match else t)
  except Exception:raw=[]
- diffs=[ProofreadDiff(original=d.get('original',''),suggested=d.get('suggested',''),reason=d.get('reason',''))
-        for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in content]
- return ProofreadResult(diffs=diffs)
+ return [{'original':d.get('original',''),'suggested':d.get('suggested',''),'reason':d.get('reason','')}
+         for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in content]
+def _proofread_setup(eid,x,db):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ p=db.get(Project,e.project_id)
+ if not (p.style_guide or '').strip():raise HTTPException(400,'スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。')
+ content=x.content if x.content is not None else e.content
+ return e,p,content
+@app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
+async def episode_proofread(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+ e,p,content=_proofread_setup(eid,x,db)
+ try:t,m=await generate(_proofread_prompt(p.style_guide,content),e.project_id)
+ except ProviderError as ex:raise HTTPException(400,str(ex))
+ except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
+ return ProofreadResult(diffs=[ProofreadDiff(**d) for d in _parse_proofread_diffs(t,content)])
+@app.post('/api/v1/episodes/{eid}/proofread/stream')
+async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+ # Proofreading a full episode can take long enough for a slow local LLM
+ # that a single buffered request sits idle past an intermediate proxy's
+ # timeout (observed: Cloudflare Tunnel returning a 504 well before the
+ # model finished) — streaming keeps bytes flowing throughout generation
+ # so nothing in the path ever sees a silent, timeout-worthy gap. The
+ # response shape mirrors /ai/generate/stream (delta/done/error events);
+ # the final event additionally carries the parsed, filtered `diffs`, so
+ # the client never has to parse JSON out of accumulated deltas itself.
+ e,p,content=_proofread_setup(eid,x,db)
+ prompt=_proofread_prompt(p.style_guide,content)
+ async def gen():
+  text=''
+  try:
+   async for event in generate_stream(prompt,e.project_id):
+    if event.get('delta'):
+     text+=event['delta']
+     yield f'data: {json.dumps({"delta":event["delta"]},ensure_ascii=False)}\n\n'
+    if event.get('done'):
+     yield f'data: {json.dumps({"done":True,"diffs":_parse_proofread_diffs(text,content)},ensure_ascii=False)}\n\n'
+  except ProviderError as ex:
+   yield f'data: {json.dumps({"error":str(ex)},ensure_ascii=False)}\n\n'
+  except Exception as ex:
+   yield f'data: {json.dumps({"error":f"AI provider error: {ex}"},ensure_ascii=False)}\n\n'
+ return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 def content_disposition(filename,ext):
  # filename=... must be latin-1 (the title is almost always non-ASCII
  # Japanese), so give ASCII-only clients a safe fallback name and encode

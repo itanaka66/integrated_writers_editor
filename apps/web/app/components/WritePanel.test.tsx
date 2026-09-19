@@ -27,6 +27,24 @@ function mockStream(fullText: string) {
   });
 }
 
+type ProofreadDiff = { original: string; suggested: string; reason: string };
+
+// Simulates a sequence of /proofread/stream calls (one entry per call this
+// test expects) — `null` means the connection produced no event at all
+// before ending (a dropped/failed attempt with no error payload either),
+// exercising the same silent-retry path a real error event would.
+function mockProofreadStream(responses: Array<{ diffs?: ProofreadDiff[]; error?: string } | null>) {
+  let call = 0;
+  vi.mocked(streamSSE).mockImplementation((path, onMessage, onDone) => {
+    if (!(path as string).includes("/proofread/stream")) { onDone?.(); return () => {}; }
+    const r = responses[call++];
+    if (r?.error) onMessage({ error: r.error });
+    else if (r) onMessage({ done: true, diffs: r.diffs ?? [] });
+    onDone?.();
+    return () => {};
+  });
+}
+
 describe("WritePanel", () => {
   beforeEach(() => {
     vi.mocked(api).mockReset();
@@ -97,17 +115,12 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    vi.mocked(post).mockImplementation((path: string) => {
-      if (path.includes("/proofread")) {
-        return Promise.resolve({
-          diffs: [
-            { original: "本文", suggested: "改訂後の本文", reason: "である調に統一" },
-            { original: "見つからない文字列", suggested: "x", reason: "適用されないはず" },
-          ],
-        });
-      }
-      return Promise.resolve({});
-    });
+    mockProofreadStream([{
+      diffs: [
+        { original: "本文", suggested: "改訂後の本文", reason: "である調に統一" },
+        { original: "見つからない文字列", suggested: "x", reason: "適用されないはず" },
+      ],
+    }]);
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
@@ -121,6 +134,10 @@ describe("WritePanel", () => {
 
     await waitFor(() => expect(screen.queryByText("文章校正")).not.toBeInTheDocument());
     expect(screen.getByDisplayValue("改訂後の本文")).toBeInTheDocument();
+
+    const call = vi.mocked(streamSSE).mock.calls[0];
+    expect(call[0]).toBe(`/episodes/${episode.id}/proofread/stream`);
+    expect(call[3]).toEqual({ content: episode.content });
   });
 
   it("silently retries once on a transient proofread failure instead of erroring", async () => {
@@ -129,23 +146,15 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    let calls = 0;
-    vi.mocked(post).mockImplementation((path: string) => {
-      if (path.includes("/proofread")) {
-        calls += 1;
-        if (calls === 1) return Promise.reject(new SyntaxError("Unexpected token '<'"));
-        return Promise.resolve({ diffs: [] });
-      }
-      return Promise.resolve({});
-    });
+    mockProofreadStream([null, { diffs: [] }]);
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
     fireEvent.click(screen.getByText("📐 文章校正"));
 
     await waitFor(() => expect(screen.getByText("スタイルガイドに沿った修正点は見つかりませんでした。")).toBeInTheDocument());
-    expect(calls).toBe(2);
-    expect(screen.queryByText("Unexpected token")).not.toBeInTheDocument();
+    expect(vi.mocked(streamSSE).mock.calls.filter((c) => (c[0] as string).includes("/proofread/stream")).length).toBe(2);
+    expect(screen.queryByText(/失敗/)).not.toBeInTheDocument();
   });
 
   it("surfaces an error only after both proofread attempts fail", async () => {
@@ -154,14 +163,14 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    vi.mocked(post).mockRejectedValue(new Error("校正に失敗しました。"));
+    mockProofreadStream([{ error: "校正に失敗しました。" }, { error: "校正に失敗しました。" }]);
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
     fireEvent.click(screen.getByText("📐 文章校正"));
 
     await waitFor(() => expect(screen.getByText("校正に失敗しました。")).toBeInTheDocument());
-    expect(vi.mocked(post).mock.calls.filter((c) => (c[0] as string).includes("/proofread")).length).toBe(2);
+    expect(vi.mocked(streamSSE).mock.calls.filter((c) => (c[0] as string).includes("/proofread/stream")).length).toBe(2);
   });
 
   it("opens the same proofread panel from the AI EDITOR sidebar's 校正 shortcut", async () => {
@@ -170,14 +179,16 @@ describe("WritePanel", () => {
       if (path.includes("/sources")) return Promise.resolve([]);
       return Promise.resolve([]);
     });
-    vi.mocked(post).mockResolvedValue({ diffs: [] });
+    mockProofreadStream([{ diffs: [] }]);
     render(<WritePanel project={project} />);
 
     await waitFor(() => expect(screen.getByText("校正")).toBeInTheDocument());
     fireEvent.click(screen.getByText("校正"));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "文章校正" })).toBeInTheDocument());
-    expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/proofread`, { content: episode.content });
+    const call = vi.mocked(streamSSE).mock.calls[0];
+    expect(call[0]).toBe(`/episodes/${episode.id}/proofread/stream`);
+    expect(call[3]).toEqual({ content: episode.content });
   });
 
   it("copies the content to the clipboard for pasting into Word", async () => {
