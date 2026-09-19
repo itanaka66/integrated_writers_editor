@@ -23,4 +23,18 @@ class Settings(BaseSettings):
  # to disk on a timer. Interval default is once a day; retention keeps the
  # N most recent backups and deletes older ones.
  backup_enabled:bool=False; backup_dir:str='./backups'; backup_interval_seconds:int=86400; backup_retention_count:int=7
+ # OAuth2 "Sign in with..." login (Google/GitHub), layered alongside HTTP
+ # Basic Auth rather than replacing it (see app/auth.py). Entirely opt-in:
+ # wired up only when session_secret AND at least one provider's
+ # client_id+client_secret are set. public_base_url is the externally
+ # reachable origin the browser hits (e.g. https://writer.example.com) —
+ # needed to build each provider's exact redirect_uri, since OAuth apps
+ # require one registered ahead of time.
+ google_client_id:str=''; google_client_secret:str=''
+ github_client_id:str=''; github_client_secret:str=''
+ session_secret:str=''; public_base_url:str=''
+ # Only set this false for local http:// dev — session cookies are marked
+ # Secure by default and browsers silently drop Secure cookies over plain
+ # HTTP, which would make OAuth login look like it "does nothing".
+ secure_cookies:bool=True
 settings=Settings()

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { clearAuth, getAuth, setUnauthorizedHandler } from "./lib/api";
+import { api, clearAuth, getAuth, setUnauthorizedHandler } from "./lib/api";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
 import Sidebar, { Section } from "./components/Sidebar";
@@ -17,7 +17,15 @@ export default function Studio() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => { clearAuth(); setAuthed(false); });
-    setAuthed(!!getAuth());
+    // localStorage creds are the fast, common-case path for existing Basic
+    // Auth users, but the real source of truth is now "did an authenticated
+    // request succeed" — an OAuth2 login has nothing in localStorage at
+    // all, only a session cookie, so it can only be detected by asking the
+    // API. /auth/me is the cheapest authenticated call that does that.
+    if (getAuth()) setAuthed(true);
+    api("/auth/me")
+      .then(() => setAuthed(true))
+      .catch(() => setAuthed((prev) => (prev ? prev : false)));
     return () => setUnauthorizedHandler(null);
   }, []);
 

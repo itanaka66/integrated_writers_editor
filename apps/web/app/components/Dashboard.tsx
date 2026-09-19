@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, ApiError, clearAuth } from "../lib/api";
+import { api, ApiError, clearAuth, oauthUrl } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import NewProjectForm from "./NewProjectForm";
 import ImportPanel from "./ImportPanel";
@@ -34,8 +34,17 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
   }
   useEffect(() => { load(); }, []);
 
-  function logout() {
+  async function logout() {
     clearAuth();
+    // Also clears the OAuth2 session cookie (see apps/api/app/main.py) —
+    // harmless no-op for a Basic-Auth-only user who never had one, but
+    // required for an OAuth-only user, who has nothing in localStorage to
+    // clear in the first place.
+    try {
+      await fetch(oauthUrl("/logout"), { credentials: "include" });
+    } catch {
+      /* best-effort; localStorage is already cleared either way */
+    }
     window.location.reload();
   }
 

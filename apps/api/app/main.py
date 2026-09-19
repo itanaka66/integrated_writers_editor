@@ -12,7 +12,7 @@ from .schemas import *
 from .providers import generate, generate_stream, ProviderError
 from .rag import index,search,search_all_projects
 from .context import build
-from .auth import BasicAuthMiddleware
+from .auth import AuthMiddleware
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import runtime_config as rc
@@ -26,19 +26,70 @@ from . import backup as backup_mod
 from . import materials
 from editor_common.users import (
  ensure_bootstrap_user,list_users,create_user,change_password,set_active,delete_user,
- UsernameTakenError,UserNotFoundError,
+ UsernameTakenError,UserNotFoundError,get_or_create_oauth_user,
 )
+from editor_common.oauth import google_provider,github_provider,register_oauth_routes
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='writers-studio-change-me':
  logger.warning('ADMIN_PASSWORD is not set; using the insecure default. Set ADMIN_USERNAME/ADMIN_PASSWORD before exposing this service.')
 app=FastAPI(title='Integrated writers Editor (INE) API',version='0.5.0')
 # Starlette wraps middleware in reverse of add order (last added = outermost),
-# so BasicAuthMiddleware is added first: CORS must stay outermost or a 401
+# so AuthMiddleware is added first: CORS must stay outermost or a 401
 # response never gets CORS headers and the browser reports an opaque network
 # error instead of a readable 401.
-app.add_middleware(BasicAuthMiddleware)
+app.add_middleware(AuthMiddleware)
 app.add_middleware(DynamicCORSMiddleware,allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+
+# OAuth2 "Sign in with..." login (Google/GitHub), alongside HTTP Basic Auth
+# (see app/auth.py) rather than replacing it. Entirely opt-in: only mounted
+# when a session_secret AND at least one provider's client_id+secret are
+# configured — most deployments won't have this set up.
+_oauth_providers={}
+if settings.google_client_id and settings.google_client_secret:
+ _oauth_providers['google']=(settings.google_client_id,settings.google_client_secret)
+if settings.github_client_id and settings.github_client_secret:
+ _oauth_providers['github']=(settings.github_client_id,settings.github_client_secret)
+if _oauth_providers and not settings.session_secret:
+ logger.warning('GOOGLE_CLIENT_ID/GITHUB_CLIENT_ID is set but SESSION_SECRET is not; OAuth2 login will stay disabled until SESSION_SECRET is also configured.')
+elif _oauth_providers and settings.session_secret:
+ if not settings.public_base_url:
+  logger.warning('OAuth2 login is configured but PUBLIC_BASE_URL is not set; provider redirect URIs will be wrong. OAuth2 login is disabled until PUBLIC_BASE_URL is set.')
+ else:
+  base=settings.public_base_url.rstrip('/')
+  def _get_or_create_user(email,name):
+   db=SessionLocal()
+   try:
+    return get_or_create_oauth_user(db,User,email,display_name=name)
+   finally:
+    db.close()
+  providers={}
+  if 'google' in _oauth_providers:
+   cid,secret=_oauth_providers['google']
+   providers['google']=google_provider(cid,secret,redirect_uri=f'{base}/api/v1/auth/callback/google')
+  if 'github' in _oauth_providers:
+   cid,secret=_oauth_providers['github']
+   providers['github']=github_provider(cid,secret,redirect_uri=f'{base}/api/v1/auth/callback/github')
+  register_oauth_routes(
+   app,
+   providers=providers,
+   session_secret=settings.session_secret,
+   get_or_create_user=_get_or_create_user,
+   prefix='/api/v1/auth',
+   session_max_age_seconds=2592000,
+   on_login_redirect='/',
+   on_logout_redirect='/',
+   secure_cookies=settings.secure_cookies,
+  )
+elif settings.session_secret and not _oauth_providers:
+ logger.warning('SESSION_SECRET is set but no OAuth provider (GOOGLE_CLIENT_ID/GITHUB_CLIENT_ID) is configured; OAuth2 login stays unavailable.')
+
+@app.get('/api/v1/auth/providers')
+def auth_providers():
+ return {
+  'google':bool(settings.google_client_id and settings.google_client_secret and settings.session_secret and settings.public_base_url),
+  'github':bool(settings.github_client_id and settings.github_client_secret and settings.session_secret and settings.public_base_url),
+ }
 _background_tasks=set() # strong refs so asyncio doesn't GC in-flight background tasks (autosync loop)
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
@@ -217,6 +268,9 @@ def require_admin(user:User=Depends(get_current_user))->User:
  if not user.is_admin:raise HTTPException(403,'管理者権限が必要です。')
  return user
 def _user_out(u):return UserOut.model_validate(u)
+@app.get('/api/v1/auth/me',response_model=UserOut)
+def auth_me(user:User=Depends(get_current_user)):
+ return _user_out(user)
 def _other_active_admins_remain(db,excluding_username:str)->bool:
  return db.scalar(select(User.id).where(User.is_admin,User.is_active,User.username!=excluding_username).limit(1)) is not None
 @app.get('/api/v1/users',response_model=list[UserOut])
