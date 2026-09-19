@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { post } from "../lib/api";
+import { streamSSE } from "../lib/api";
 
 type Diff = { original: string; suggested: string; reason: string };
 
-// Step-through proofreading: fetches style-guide-based diffs for one
-// episode, then walks the user through them one at a time — each diff is
-// either applied (replacing the first remaining occurrence of `original`
-// in a local working copy of the content) or skipped, never both at once,
-// so the same original text can't be replaced twice if it repeats.
+// Step-through proofreading: streams style-guide-based diffs for one
+// episode (a buffered single-response call was observed to sit idle long
+// enough to trip an intermediate proxy's timeout — see
+// /episodes/{id}/proofread/stream's docstring), then walks the user
+// through the result one diff at a time — each is either applied
+// (replacing the first remaining occurrence of `original` in a local
+// working copy of the content) or skipped, never both at once, so the
+// same original text can't be replaced twice if it repeats.
 export default function ProofreadPanel({
   episodeId,
   content,
@@ -33,28 +36,38 @@ export default function ProofreadPanel({
 
   useEffect(() => {
     let cancelled = false;
-    // A cold Cloudflare Tunnel/proxy connection right after a deploy has
-    // been observed to drop the very first request through it, well before
-    // this ever reaches the app; one silent retry absorbs that one-off
-    // without bothering the user with an error for something that
-    // succeeds a moment later on its own. Loading stays shown across both
-    // attempts — only a second failure surfaces as an error.
-    (async () => {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const r: { diffs: Diff[] } = await post(`/episodes/${episodeId}/proofread`, { content: checkedContent.current });
-          if (!cancelled) setDiffs(r.diffs);
-          break;
-        } catch (err) {
+    let cancelStream = () => {};
+    let attempt = 0;
+
+    function start() {
+      setLoading(true);
+      setError("");
+      let gotError = "";
+      let gotDiffs: Diff[] | null = null;
+      cancelStream = streamSSE(
+        `/episodes/${episodeId}/proofread/stream`,
+        (data) => {
+          const event = data as { error?: string; done?: boolean; diffs?: Diff[] };
+          if (event.error) gotError = event.error;
+          if (event.done) gotDiffs = event.diffs || [];
+        },
+        () => {
           if (cancelled) return;
-          if (attempt === 1) setError(err instanceof Error ? err.message : "校正に失敗しました。");
-        }
-      }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- checkedContent
-    // is a ref snapshot taken once at open time, intentionally not re-read
+          if (gotDiffs) { setDiffs(gotDiffs); setLoading(false); return; }
+          // No diffs arrived — either a mid-stream error event, or the
+          // connection dropped before any event reached us at all. A
+          // single silent retry absorbs a one-off connection hiccup
+          // without bothering the user with an error that clears itself
+          // a moment later.
+          if (attempt === 0) { attempt = 1; start(); return; }
+          setError(gotError || "校正に失敗しました。");
+          setLoading(false);
+        },
+        { content: checkedContent.current },
+      );
+    }
+    start();
+    return () => { cancelled = true; cancelStream(); };
   }, [episodeId]);
 
   const current = diffs[index];
