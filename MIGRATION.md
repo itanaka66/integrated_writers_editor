@@ -3,33 +3,53 @@
 This app's database schema is owned by [Alembic](https://alembic.sqlalchemy.org/).
 Migration scripts live in [`apps/api/alembic/versions/`](apps/api/alembic/versions/).
 
-Applying the schema is **not automatic** on container startup — `apps/api/app/main.py`'s
-startup hook only seeds demo data / bootstrap accounts, it never runs migrations. You must
-run `alembic upgrade head` yourself after every deploy that includes a new migration file.
+Applying the schema **is automatic** on container startup: `apps/api/Dockerfile`'s `CMD` is
+`alembic upgrade head && uvicorn app.main:app ...` — every time the `api` container starts
+(including a plain restart, not just a rebuild), it runs pending migrations before the
+server comes up. `apps/api/app/main.py`'s own startup hook is a separate, later step that
+only seeds demo data / bootstrap accounts — it does not run migrations itself, but by the
+time it runs, migrations already have.
+
+**Do not also run `alembic upgrade head` yourself against a container that's starting or
+about to start** — two invocations racing (the automatic one in `CMD`, plus a manual one)
+can interleave against the same database and leave a migration half-applied: one process's
+`ADD COLUMN` commits, then the other's identical `ADD COLUMN` fails with
+`DuplicateColumn`, crash-looping the container indefinitely since every restart re-runs the
+same broken migration attempt. If you hit this, see "Recovering from a stuck migration"
+below rather than restarting repeatedly.
 
 ## Running a migration
 
-Run this after pulling a new `main` that includes new files under
-`apps/api/alembic/versions/`, and after rebuilding/restarting the `api` container so it's
-running the new code (a migration only adds *columns/tables* — it doesn't change what code
-is loaded).
-
-Using the prebuilt-image compose file:
+Normally nothing beyond a routine deploy is needed — pulling a new `main` with a new file
+under `apps/api/alembic/versions/` and restarting/rebuilding the `api` container is enough,
+since `CMD` runs `alembic upgrade head` automatically:
 
 ```bash
 cd ~/integrated_writers_editor
 git pull origin main
 docker compose -f docker-compose.release.yml up -d --build --no-deps api
-docker compose -f docker-compose.release.yml exec api alembic upgrade head
 ```
 
 Using the build-from-source compose file, swap `docker-compose.release.yml` for
-`docker-compose.yml` in the commands above.
+`docker-compose.yml`. Only reach for a manual `alembic` invocation (verifying state,
+rolling back, or recovering below) when the container is **not** concurrently starting —
+use `docker compose run --rm api <command>` (a one-off container, doesn't touch the
+running/restarting one) rather than `exec` if you're not certain the main container is up
+and idle.
 
 ### Verifying it applied
 
+If the `api` container is up and healthy, `exec` works fine:
+
 ```bash
 docker compose -f docker-compose.release.yml exec api alembic current
+```
+
+If it's crash-looping (see below), use a one-off container instead — `exec` requires a
+running container, which a crash-looping one isn't:
+
+```bash
+docker compose -f docker-compose.release.yml run --rm api alembic current
 ```
 
 The printed revision id should match the newest file's `revision = '...'` value in
@@ -40,8 +60,58 @@ The printed revision id should match the newest file's `revision = '...'` value 
 Only if something goes wrong and you need to undo the most recent migration:
 
 ```bash
-docker compose -f docker-compose.release.yml exec api alembic downgrade -1
+docker compose -f docker-compose.release.yml run --rm api alembic downgrade -1
 ```
+
+### Recovering from a stuck migration
+
+If `docker compose ... ps` shows no `api` container (or it's stuck restarting) and its logs
+show a DDL error like `DuplicateColumn`/`UndefinedColumn` from Alembic, the most likely
+cause is exactly the race described above: a migration applied *some* of its statements
+(they succeeded and committed) before failing, so the database is left partway between two
+revisions while `alembic_version` still points at the older one — every automatic retry via
+`CMD` re-attempts the same statements from the top and hits the ones that already
+succeeded.
+
+1. Compare what the migration file's `upgrade()` says it does against what's actually in
+   the database, using a one-off container (never `exec` here — the real container isn't
+   running):
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api python -c "
+   from sqlalchemy import create_engine, text
+   from app.config import settings
+   e = create_engine(settings.database_url)
+   with e.connect() as c:
+       print(c.execute(text(\"select column_name, is_nullable from information_schema.columns where table_name='<table>'\")).fetchall())
+       print(c.execute(text(\"select indexname from pg_indexes where tablename='<table>'\")).fetchall())
+       print(c.execute(text('select version_num from alembic_version')).fetchall())
+   "
+   ```
+2. Manually run whichever of the migration's statements are missing (copy them straight out
+   of the migration file's `upgrade()`), wrapped in one transaction:
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api python -c "
+   from sqlalchemy import create_engine, text
+   from app.config import settings
+   e = create_engine(settings.database_url)
+   with e.begin() as c:
+       c.execute(text('...the missing statement(s) here...'))
+   "
+   ```
+3. Once the database actually matches what `upgrade()` describes, tell Alembic it's done
+   *without* re-running it — `stamp` only writes the version row, it executes no DDL:
+
+   ```bash
+   docker compose -f docker-compose.release.yml run --rm api alembic stamp head
+   ```
+4. Start the container normally — `CMD`'s `alembic upgrade head` is now a no-op since
+   `alembic_version` already matches head:
+
+   ```bash
+   docker compose -f docker-compose.release.yml up -d api
+   ```
 
 ## Writing a new migration
 
