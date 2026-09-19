@@ -79,10 +79,28 @@ def test_generate_gives_up_after_max_attempts(monkeypatch):
     assert _FlakyClient.calls["count"] == common_ollama.MAX_ATTEMPTS
 
 
-def test_generate_sends_the_configured_generation_options(monkeypatch):
+def test_generate_sends_no_options_override_for_a_non_rtx3090_host(monkeypatch):
+    # The A770 host can't handle the RTX3090's large context/prediction
+    # window, so it gets no "options" override at all — Ollama's own
+    # built-in defaults apply instead.
     _FlakyClient.calls["count"] = 0
     monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
     monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
 
     asyncio.run(ollama.generate("hello", model="test-model"))
-    assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS
+    assert "options" not in _FlakyClient.last_json
+
+
+def test_generate_sends_the_configured_generation_options_for_the_rtx3090_host(monkeypatch):
+    rtx_config = EffectiveConfig(
+        qdrant_url="http://qdrant:6333",
+        ollama_url=f"http://{ollama.RTX3090_HOST}:11434",
+        ollama_model="stub-writer-model",
+        ollama_embed_model="stub-embed-model",
+    )
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: rtx_config)
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS_RTX3090
