@@ -95,6 +95,26 @@ def test_proofread_returns_diffs_matching_content(client, project, monkeypatch):
     assert diffs[0]["suggested"] == "である。"
 
 
+def test_proofread_checks_unsaved_content_when_provided(client, project, monkeypatch):
+    # The write screen sends its current (possibly-unsaved) textarea value
+    # as `content` — the endpoint must check that instead of whatever's in
+    # the database, so 校正 reflects what's on screen even before 保存.
+    client.put(f"/api/v1/projects/{project['id']}", json={"style_guide": "である調で統一する"})
+    r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "保存済みの本文です。"})
+    episode = r.json()
+
+    async def fake_generate(prompt, project_id=None):
+        assert "保存済み" not in prompt
+        assert "未保存の編集中の本文です。" in prompt
+        return '[{"original": "未保存", "suggested": "編集中", "reason": "r"}]', "test-model"
+
+    monkeypatch.setattr(main_module, "generate", fake_generate)
+
+    r = client.post(f"/api/v1/episodes/{episode['id']}/proofread", json={"content": "未保存の編集中の本文です。"})
+    assert r.status_code == 200, r.text
+    assert r.json()["diffs"][0]["original"] == "未保存"
+
+
 def test_proofread_empty_diffs_when_no_changes_needed(client, project, monkeypatch):
     client.put(f"/api/v1/projects/{project['id']}", json={"style_guide": "である調で統一する"})
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文である。"})

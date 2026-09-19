@@ -125,17 +125,18 @@ async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGen
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return StyleGuideOut(style_guide=t.strip())
 @app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
-async def episode_proofread(eid:int,db:Session=Depends(get_db)):
+async def episode_proofread(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
  e=crud_get_or_404(db,Episode,eid,'Episode')
  p=db.get(Project,e.project_id)
  if not (p.style_guide or '').strip():raise HTTPException(400,'スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。')
+ content=x.content if x.content is not None else e.content
  prompt=f'''あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。
 
 スタイルガイド:
 {p.style_guide}
 
 本文:
-{e.content}
+{content}
 
 出力は必ず次のJSON配列のみとし、他の説明文は一切含めないでください。修正不要なら空配列 [] を返してください。
 [{{"original": "本文中に完全一致する修正対象の原文", "suggested": "修正後の文字列", "reason": "修正理由（簡潔に）"}}]'''
@@ -146,7 +147,7 @@ async def episode_proofread(eid:int,db:Session=Depends(get_db)):
  try:raw=json.loads(match.group(0) if match else t)
  except Exception:raw=[]
  diffs=[ProofreadDiff(original=d.get('original',''),suggested=d.get('suggested',''),reason=d.get('reason',''))
-        for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in e.content]
+        for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in content]
  return ProofreadResult(diffs=diffs)
 def content_disposition(filename,ext):
  # filename=... must be latin-1 (the title is almost always non-ASCII

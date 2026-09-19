@@ -123,6 +123,47 @@ describe("WritePanel", () => {
     expect(screen.getByDisplayValue("改訂後の本文")).toBeInTheDocument();
   });
 
+  it("silently retries once on a transient proofread failure instead of erroring", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    let calls = 0;
+    vi.mocked(post).mockImplementation((path: string) => {
+      if (path.includes("/proofread")) {
+        calls += 1;
+        if (calls === 1) return Promise.reject(new SyntaxError("Unexpected token '<'"));
+        return Promise.resolve({ diffs: [] });
+      }
+      return Promise.resolve({});
+    });
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📐 文章校正"));
+
+    await waitFor(() => expect(screen.getByText("スタイルガイドに沿った修正点は見つかりませんでした。")).toBeInTheDocument());
+    expect(calls).toBe(2);
+    expect(screen.queryByText("Unexpected token")).not.toBeInTheDocument();
+  });
+
+  it("surfaces an error only after both proofread attempts fail", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(post).mockRejectedValue(new Error("校正に失敗しました。"));
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📐 文章校正")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📐 文章校正"));
+
+    await waitFor(() => expect(screen.getByText("校正に失敗しました。")).toBeInTheDocument());
+    expect(vi.mocked(post).mock.calls.filter((c) => (c[0] as string).includes("/proofread")).length).toBe(2);
+  });
+
   it("opens the same proofread panel from the AI EDITOR sidebar's 校正 shortcut", async () => {
     vi.mocked(api).mockImplementation((path: string) => {
       if (path.includes("/episodes")) return Promise.resolve([episode]);
@@ -136,7 +177,7 @@ describe("WritePanel", () => {
     fireEvent.click(screen.getByText("校正"));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "文章校正" })).toBeInTheDocument());
-    expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/proofread`, {});
+    expect(post).toHaveBeenCalledWith(`/episodes/${episode.id}/proofread`, { content: episode.content });
   });
 
   it("copies the content to the clipboard for pasting into Word", async () => {
