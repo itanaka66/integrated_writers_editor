@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { api, setAuth } from "../lib/api";
+import { api, ApiError, setAuth } from "../lib/api";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -24,6 +24,8 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       // keeps happening after double-checking the password.
       if (err instanceof Error && err.message === "unauthorized") {
         setError("ユーザー名またはパスワードが違います。");
+      } else if (err instanceof ApiError && err.status === 429) {
+        setError("ログイン試行の失敗が続いたため、一時的にアクセスがロックされています。しばらく待ってから再度お試しください。");
       } else {
         setError("APIに接続できませんでした。サーバーが起動しているか、.envのCORS_ORIGINSにこのページのアドレスが含まれているかを確認してください。");
       }
