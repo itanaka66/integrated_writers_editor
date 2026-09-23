@@ -16,12 +16,9 @@ layout: default
 1. https://ollama.com からOllamaをインストールします。
 2. 使う予定のモデルを取得します。
    ```bash
-   ollama pull qwen3:8b
-   ollama pull qwen3.8:27b
-   ollama pull qwen3:14b
-   ollama pull nomic-embed-text
+   ollama pull qwen3:8b          # AI支援（執筆画面・チャット・各種AIツール）
+   ollama pull nomic-embed-text  # RAG用埋め込みモデル（セマンティック検索）
    ```
-   `qwen3.8:27b`と`qwen3:14b`は大きなモデルです。執筆画面のAI支援（`qwen3:8b`）だけ使い、500話自動執筆機能はまだ使わないのであれば省略しても構いません。
 3. 起動確認：`curl http://localhost:11434/api/tags` がJSONを返せばOKです。
 
 ## 2. 方式A — Docker Compose
