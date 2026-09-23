@@ -11,19 +11,18 @@ This guide is for readers who aren't necessarily comfortable with Docker or comm
 
 ## What this app does
 
-Integrated writers Editor (INE) is a writing environment for long-form writerss (from a handful of episodes up to ~500). It combines:
+Integrated Writers Editor (INE) is an AI-assisted article editor. It combines:
 
-- A writing screen with an AI assistant that can continue your prose, summarize, proofread, or check for contradictions.
-- A structured story database (characters, world entities, plot, foreshadowing, timeline) that the AI reads before generating text, so it stays consistent with what you've already established.
-- An "auto-write" mode where the AI plans and writes episodes 1 through up to 500 on its own (needs a reasonably capable machine plus Ollama).
-
-Everything runs on your own machine (or your own server) — no external cloud AI API is called.
+- A writing screen with an AI tool panel covering idea generation, article structuring, SEO keywords, headline improvement, fact-checking, multi-format conversion, reader-target analysis, and catchphrase generation.
+- A materials library (memos, sources/references) attached to each project.
+- Full revision history, text search and replace-all (across episodes and memos), semantic search via RAG, and project export.
+- Support for Ollama (local) or cloud AI providers (Anthropic Claude, OpenAI, Google Gemini) — switch from Settings, no restart needed.
 
 ## Before you install
 
-- A machine with decent specs, ideally a dedicated GPU — the AI models run locally, and generation will be slow on weak hardware.
 - Docker (recommended). See [Software Requirements](requirements.md) for details.
-- Follow the [Installation Manual](installation.md) to actually get it running. This guide picks up from "it's installed, now what?"
+- For local AI (Ollama): a machine with decent specs — pull `qwen3:8b` and `nomic-embed-text` before starting.
+- Follow the [Installation Manual](installation.md) to get it running. This guide picks up from "it's installed, now what?"
 
 ## Your first steps
 
@@ -37,43 +36,35 @@ After logging in you land on the Dashboard, listing your projects. On a fresh in
 
 ### 3. Create a new project
 
-Click "＋ 新規作品作成" (New Project) in the top right, fill in a name (required), genre, synopsis, and target episode count, then "作成する" (Create). Anything you skip can be edited later from Settings.
+Click "＋ 新規作品作成" (New Project) in the top right, fill in a name (required), genre, synopsis, and target article count, then "作成する" (Create). Anything you skip can be edited later from Settings.
 
 ### 4. Look at the Project Home
 
-Creating a project takes you straight to its home screen, with shortcut icons for Write, Plot, Characters, World, Timeline, Glossary, Foreshadowing, Analytics, and Settings. A good order to fill things in:
+Creating a project takes you straight to its home screen, showing your article stats and shortcuts to the five main screens: 執筆 (Write), 資料 (Materials), 検索 (Search), AIチャット (AI Chat), and 設定 (Settings).
 
-1. **Characters** — add your two or three main characters (name, role, and personality are enough to start)
-2. **World** — one or two key locations or settings
-3. **Plot** — one entry describing the overall goal and conflict
+### 5. Write your first article
 
-You can always add more later — the AI automatically reads whatever is registered here when it generates text.
+Open "執筆" (Write) from the sidebar. Click "＋ 新規記事" to create article 1 and start writing. Save with "保存" when you're ready.
 
-### 5. Write your first episode
+The AI tools panel on the right offers four groups:
+- **企画・構成**: 💡 idea generation, 🧱 article structuring (SEO/news/explainer), 🔑 SEO keywords, 🎯 reader-target analysis
+- **執筆支援**: ▶ continue writing (streaming), ✎ improve text, 🏷 headline/title improvement (3 proposals)
+- **品質チェック**: 🧩 structure check, ✅ fact-check, ⚠ contradiction check, 👀 reader review, 🔤 typo check
+- **変換・要約**: 📝 summary (streaming), 🔁 multi-format conversion (SNS/newsletter/press release), 📣 catchphrase generation (5 proposals)
 
-Open "執筆" (Write) from the sidebar. Click "＋ 新規エピソード" to create episode 1 and start writing. When you save with "保存＋人物状態更新" (Save + Update Character States), the AI also reads the episode and records any character-state changes it detects (alive/dead, location, emotion, etc.).
+If you like a result, "＋ 本文に追加" (Add to text) appends it to the article body.
 
-The "AI EDITOR-IN-CHIEF" panel on the right offers:
-- "▶ 続きを書く" (Continue writing) — has the AI continue your prose
-- "◆ 次の展開" (Next development), "要約" (Summarize), "校正" (Proofread) — specific one-off tasks
-- "⚠ 連続性を監査" (Audit continuity) — checks what you've written against your registered characters/world/plot for contradictions
-- Six "QUICK CUSTOM CHECKS" buttons for specific checks (timeline, character state, world, foreshadowing, plot, prose quality)
+### 6. Add reference material
 
-If you like the result, "＋ 本文に追加" (Add to text) appends it to the episode.
-
-### 6. (Optional) Try auto-write
-
-Once you've registered a bit of story data, open "🚀 自動執筆" (Auto-write) from the sidebar, pick a start/end episode, and click "自動執筆を開始" (Start). The AI plans and writes those episodes on its own, checking its own work along the way. Try a small range first (e.g. episodes 1–2) — it's a slow operation. Progress is shown live with a bar and a phase label (Series Planner → Arc/Mini Arc/Episode Planner → Writer → Controller review).
-
-See [the Auto-write section of the User Guide](user-guide.md#auto-write) for how it actually works under the hood.
+Open "資料" (Materials) to attach memos (free-form notes) to the project, or to manage reference sources linked to specific articles. The AI's "要約" (Summarize) tool can condense a source's text for you.
 
 ## FAQ
 
 **Q: The AI doesn't respond, or errors out.**
-A: Ollama probably isn't running, or you haven't pulled the model yet. See the [Troubleshooting section](installation.md#troubleshooting) of the Installation Manual.
+A: For Ollama: check that Ollama is running and the model is pulled. For cloud providers: verify the API key is set in Settings → 接続設定. See the [Troubleshooting section](installation.md#troubleshooting) of the Installation Manual.
 
 **Q: Can multiple people use this?**
-A: This is built for a single person (or a small, trusted team) — everyone shares one password. There are no per-user accounts or data permissions.
+A: This is built for a single person or a small, trusted team — everyone shares one password. There are no per-user accounts or data permissions.
 
 **Q: Can I trust what the AI generates?**
-A: No, not blindly — especially continuity-check and auto-write results are advisory. Always have a human review the final output.
+A: Use it as a starting point, not the final word — fact-check results, generated text, and suggestions should always be reviewed by a human before publishing.

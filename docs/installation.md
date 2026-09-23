@@ -16,12 +16,9 @@ By default Ollama runs on the host, not in Docker — do this regardless of whic
 1. Install Ollama from https://ollama.com.
 2. Pull the models you plan to use:
    ```bash
-   ollama pull qwen3:8b
-   ollama pull qwen3.8:27b
-   ollama pull qwen3:14b
-   ollama pull nomic-embed-text
+   ollama pull qwen3:8b          # AI assist (write screen, chat, all AI tools)
+   ollama pull nomic-embed-text  # RAG embeddings (semantic search)
    ```
-   `qwen3.8:27b` and `qwen3:14b` are large; skip them if you only want the write-screen AI assist (`qwen3:8b`) and don't plan to use the 500-episode auto-write feature yet.
 3. Confirm it's listening: `curl http://localhost:11434/api/tags` should return JSON.
 
 ## 2. Option A — Docker Compose
