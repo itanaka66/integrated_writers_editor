@@ -111,20 +111,38 @@ function Workspace() {
   const sidebar = useResizableWidth("ine-sidebar-width", { defaultWidth: 200, min: 160, max: 340, direction: "left" });
   if (!project) return <Dashboard onOpen={(p) => { setProject(p); setSection("home"); }} />;
 
+  const tabs: { key: Section; label: string }[] = [
+    { key: "home", label: "🏠 ホーム" },
+    { key: "write", label: "✎ 執筆" },
+    { key: "materials", label: "🗂 資料" },
+    { key: "search", label: "🔍 検索" },
+    { key: "chat", label: "💬 AIチャット" },
+    { key: "settings", label: "⚙ 設定" },
+  ];
+
   return (
     <div className="appShell" style={{ "--sidebarW": `${sidebar.width}px` } as CSSProperties}>
       <Sidebar
         project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)}
         resizer={<Resizer side="right" onPointerDown={sidebar.startDrag} />}
       />
-      <main className="appMain">
-        {section === "home" && <ProjectHome project={project} onSection={setSection} />}
-        {section === "write" && <WritePanel project={project} />}
-        {section === "materials" && <MaterialsPanel projectId={project.id} />}
-        {section === "search" && <SearchPanel projectId={project.id} />}
-        {section === "chat" && <ChatPanel projectId={project.id} />}
-        {section === "settings" && <SettingsPanel project={project} onSaved={setProject} />}
-      </main>
+      <div className="appContent">
+        <nav className="appTabBar">
+          {tabs.map((t) => (
+            <button key={t.key} className={section === t.key ? "appTab active" : "appTab"} onClick={() => setSection(t.key)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <main className="appMain">
+          {section === "home" && <ProjectHome project={project} onSection={setSection} />}
+          {section === "write" && <WritePanel project={project} />}
+          {section === "materials" && <MaterialsPanel projectId={project.id} />}
+          {section === "search" && <SearchPanel projectId={project.id} />}
+          {section === "chat" && <ChatPanel projectId={project.id} />}
+          {section === "settings" && <SettingsPanel project={project} onSaved={setProject} />}
+        </main>
+      </div>
     </div>
   );
 }
