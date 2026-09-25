@@ -128,4 +128,4 @@ Ollama呼び出し（`generate`/`embed`）は、一時的なネットワーク�
 
 ## ライセンス
 
-Copyright © 2026 株式会社エージーネディア (agNedia Inc.). [GNU Lesser General Public License v2.1](LICENSE)の下で公開されています。
+Copyright © 2026 株式会社エージーネディア (agNedia Inc.). [GNU General Public License v3.0](LICENSE)の下で公開されています。

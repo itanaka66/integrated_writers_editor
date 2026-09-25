@@ -130,4 +130,4 @@ Contributions and issue reports are welcome via this repository's issue tracker.
 
 ## License
 
-Copyright © 2026 agNedia Inc. (株式会社エージーネディア). Licensed under the [GNU Lesser General Public License v2.1](LICENSE).
+Copyright © 2026 agNedia Inc. (株式会社エージーネディア). Licensed under the [GNU General Public License v3.0](LICENSE).
