@@ -548,14 +548,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               </label>
               <div />
 
-              <label>
-                CORS許可オリジン<input value={sys.cors_origins} readOnly disabled />
-              </label>
-              <div />
-              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                このAPIをブラウザから呼び出せるオリジンです。セキュリティ上の理由からこの画面からは変更できません。サーバーの環境変数 <code>CORS_ORIGINS</code> を編集してコンテナを再作成してください（.envの設定方法は<a href="https://github.com/itanaka66/integrated_writers_editor/blob/main/docs/installation.ja.md" target="_blank" rel="noreferrer">インストールマニュアル</a>を参照）。
-              </p>
-
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
                 各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれもステートレスなため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
               </p>
