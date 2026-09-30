@@ -149,6 +149,19 @@ Either way, [Docker Desktop](https://www.docker.com/products/docker-desktop/) is
 
 This installer path is a thin convenience layer over Option A, not a different deployment: it writes the same `docker-compose.yml`/`.env` shape into the install folder and drives `docker compose` under the hood, so anything in this manual or in [requirements.md](requirements.md) about environment variables, ports, or troubleshooting still applies verbatim — the settings screen's [connection settings](user-guide.md#connection-settings) work exactly the same way.
 
+## 2c. Option A3 — Fully bundled Windows installer (no Docker, no prerequisites)
+
+For Windows machines where installing Docker Desktop isn't an option (locked-down corporate images, licensing concerns, or just not wanting a second piece of software), there's also a self-contained installer at `installer/windows-native/` that needs **nothing pre-installed at all** — no Docker, no Node.js, no Python, no PostgreSQL. It bundles a portable Node.js runtime, an embedded Python runtime with all backend dependencies pre-installed, a portable Qdrant binary, and PostgreSQL binaries, and runs all four as plain Windows background processes instead of containers.
+
+Download `INE-Native-Setup-<version>.exe` from the [Releases page](https://github.com/itanaka66/integrated_writers_editor/releases) (built by [`.github/workflows/build-native-windows-installer.yml`](../.github/workflows/build-native-windows-installer.yml)) and run it — same unsigned-binary SmartScreen warning as Option A2 applies. It installs Start Menu / desktop shortcuts "INEを起動 (Native)" / "INEを停止 (Native)". First launch initializes a local PostgreSQL data directory (`pgdata/` next to the installed files) and Qdrant storage directory, generates a random `ADMIN_PASSWORD` the same way Option A2 does, and opens http://localhost:3000 once the app responds. Ollama is still **not** bundled — do step 1 above regardless.
+
+Trade-offs vs. Option A / A2:
+
+- **Download size**: much larger — it bundles whole language runtimes and a database server, not just this app's own images/code.
+- **Updates**: the bundled Node/Python/Qdrant/PostgreSQL versions are pinned at build time (see the version-pin comments at the top of `installer/windows-native/bundle.ps1`) and don't update automatically — a new INE release with newer pins requires reinstalling, whereas Option A's `docker compose pull` picks up new base images independently.
+- **Isolation**: each of the four components binds to `localhost` on its own port (`3000`/`8000`/`5433`/`6333` — note Postgres uses `5433`, not the usual `5432`, specifically so it doesn't collide with a PostgreSQL instance you might already have running natively) rather than living inside an isolated container network, so a port conflict with something else on the machine is slightly more likely than under Docker.
+- Everything else (env vars, ports the app itself uses, troubleshooting, the Settings screen's [connection settings](user-guide.md#connection-settings)) is otherwise the same as the other options — see `installer/windows-native/`'s `.env.example` for the (small) set of networking-related values that differ from the Docker `.env.example` because there's no container DNS to rely on.
+
 ## 3. Option B — Running natively
 
 ### Backend

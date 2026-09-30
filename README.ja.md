@@ -83,6 +83,8 @@ Webアプリは `http://localhost:3000`（ユーザー名`admin`と設定した`
 
 ターミナル操作をしたくない場合は、[Releasesページ](https://github.com/itanaka66/integrated_writers_editor/releases)から**Windows（`.exe`）**または**macOS（`.pkg`）**のデスクトップインストーラをどうぞ。Docker Desktopは別途必要ですが、それ以外はインストーラが行い、「起動」「停止」ショートカットが作成されます。詳しくは[installer/](installer/)とインストールマニュアルのデスクトップインストーラの項目を参照してください。
 
+Dockerを一切入れたくない場合は、前提ソフトが完全に不要な**完全同梱型Windowsインストーラ**（`installer/windows-native/`、[`build-native-windows-installer.yml`](.github/workflows/build-native-windows-installer.yml)でビルド）もあります。Node.js・Python・PostgreSQL・Qdrantをインストーラ自体に同梱し、全てを通常のWindowsプロセスとして起動します。上記のDocker版インストーラよりダウンロードサイズはかなり大きく、同梱ランタイムの更新には新バージョンの再インストールが必要ですが、マシンに何も事前インストールする必要が一切ありません。詳しくは[installer/windows-native/](installer/windows-native/)とインストールマニュアルの「方式A3」を参照してください。
+
 ローカルOllamaのモデル取得：
 ```bash
 ollama pull qwen3:8b          # AI支援（執筆画面・チャット・各種AIツール）
