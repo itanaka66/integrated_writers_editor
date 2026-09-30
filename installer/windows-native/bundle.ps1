@@ -172,6 +172,18 @@ $pyExe = Join-Path $pyDistDir "python.exe"
 & $pyExe $getPip --no-warn-script-location
 if ($LASTEXITCODE -ne 0) { throw "get-pip.py failed against the embedded interpreter" }
 
+# The embeddable distribution ships with neither `setuptools` nor `wheel`.
+# Installing prebuilt wheels from PyPI doesn't need them, but
+# requirements.txt's `editor-common @ git+https://...` dependency has no
+# prebuilt wheel — pip must build it from its cloned source, and the
+# default build backend for a plain setup.py/setup.cfg package is
+# `setuptools.build_meta`. Without setuptools installed first, that build
+# fails with `BackendUnavailable: Cannot import 'setuptools.build_meta'`
+# (confirmed by hand against a real Windows machine).
+Write-Step "Installing setuptools/wheel (build backend for the git+https dependency)"
+& $pyExe -m pip install --no-warn-script-location setuptools wheel
+if ($LASTEXITCODE -ne 0) { throw "pip install setuptools wheel failed" }
+
 Write-Step "Installing apps/api/requirements.txt into the embedded interpreter"
 # requirements.txt has a `git+https://...editor-common-module` VCS
 # dependency, so `git` must be on PATH wherever bundle.ps1 itself runs
