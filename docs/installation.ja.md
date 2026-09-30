@@ -149,6 +149,19 @@ docker compose up --build
 
 このインストーラは方式Aを手軽にした薄いラッパーであり、別のデプロイ方式ではありません。インストール先に同じ形の`docker-compose.yml`/`.env`を書き込み、内部で`docker compose`を実行しているだけなので、本マニュアルや[requirements.ja.md](requirements.ja.md)の環境変数・ポート・トラブルシューティングの説明はそのまま当てはまります。設定画面の[接続設定](user-guide.ja.md#接続設定-1)も全く同じように使えます。
 
+## 2c. 方式A3 — 完全同梱型Windowsインストーラ（Dockerも前提ソフト一切不要）
+
+Docker Desktopの導入自体が難しい環境（管理者権限が制限された社用PC、ライセンス上の懸念、単にもう1つソフトを入れたくない等）向けに、`installer/windows-native/`に**何も事前インストールせずに使える**インストーラも用意しています。Dockerはもちろん、Node.js、Python、PostgreSQLも不要です。ポータブル版Node.jsランタイム、バックエンドの依存関係を全て事前インストール済みの組み込みPythonランタイム、ポータブル版Qdrantバイナリ、PostgreSQLバイナリを同梱し、この4つをコンテナではなくWindowsのバックグラウンドプロセスとして直接起動します。
+
+[Releasesページ](https://github.com/itanaka66/integrated_writers_editor/releases)（[`.github/workflows/build-native-windows-installer.yml`](../.github/workflows/build-native-windows-installer.yml)がビルド）から`INE-Native-Setup-<version>.exe`をダウンロードして実行してください。方式A2と同様、未署名のためSmartScreenの警告が出ます。スタートメニュー・デスクトップに「INEを起動 (Native)」「INEを停止 (Native)」ショートカットが作成されます。初回起動時にローカルのPostgreSQLデータディレクトリ（インストール先の`pgdata/`）とQdrantのストレージディレクトリを初期化し、方式A2と同じ方法でランダムな`ADMIN_PASSWORD`を生成し、アプリが応答するとhttp://localhost:3000 を開きます。このインストーラもOllamaは**同梱しません** — どちらの方式でも手順1は必須です。
+
+方式A・A2との違い:
+
+- **ダウンロードサイズ**：言語ランタイム一式とデータベースサーバーそのものを同梱するため、かなり大きくなります。
+- **更新**：同梱するNode/Python/Qdrant/PostgreSQLのバージョンはビルド時に固定されており（バージョン指定は`installer/windows-native/bundle.ps1`冒頭のコメントを参照）自動更新はされません。新しいピン留めを含む新バージョンのINEを使うには再インストールが必要です。一方、方式Aの`docker compose pull`はベースイメージの更新を独立して取り込めます。
+- **分離**：4つのコンポーネントはそれぞれ独立したコンテナネットワークの中ではなく、`localhost`の各ポート（`3000`/`8000`/`5433`/`6333` — PostgreSQLは通常の`5432`ではなく`5433`を使います。これは既にネイティブで動いているPostgreSQLとの衝突を避けるためです）に直接バインドするため、Docker利用時と比べると他のソフトとのポート競合がやや起こりやすくなります。
+- それ以外（アプリ自体が使う環境変数・ポート・トラブルシューティング、設定画面の[接続設定](user-guide.ja.md#接続設定-1)）は他の方式と同じです。コンテナ内DNSが存在しないために変わっているネットワーク関連の設定（少数です）は`installer/windows-native/`の`.env.example`を参照してください。
+
 ## 3. 方式B — ネイティブ構築
 
 ### バックエンド

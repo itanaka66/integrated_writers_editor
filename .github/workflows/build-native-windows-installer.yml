@@ -1,0 +1,66 @@
+name: Build native Windows installer (no Docker)
+
+# Builds the fully self-contained, Docker-free Windows installer
+# (installer/windows-native/) — bundles Node.js, Python, Qdrant, and
+# PostgreSQL binaries plus this repo's api/web code into a single .exe
+# via bundle.ps1 + Inno Setup. Separate from docker-publish.yml (which
+# publishes the api/web Docker images that the OTHER, Docker-based
+# installer at installer/windows/ pulls) — this workflow builds nothing
+# from those images and does not touch that path.
+#
+# Triggered the same way as docker-publish.yml: version tags +
+# workflow_dispatch, so it doesn't run on every push (the build is slow
+# and downloads several hundred MB of runtimes on each run).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node (for the bundle build step's own npm ci / npm run build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Only for any build-time tooling on the runner itself — the actual runtime
+      # Python bundled into the installer is downloaded fresh by bundle.ps1 as the
+      # embeddable package, independent of this runner's Python.
+      - name: Set up Python (build-time only)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+        shell: pwsh
+
+      - name: Bundle runtimes + build api/web (bundle.ps1)
+        run: .\installer\windows-native\bundle.ps1
+        shell: pwsh
+
+      - name: Compile installer (Inno Setup)
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "installer\windows-native\ine-native.iss"
+        shell: pwsh
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ine-native-windows-installer
+          path: dist/INE-Native-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Attach installer to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/INE-Native-Setup-*.exe
