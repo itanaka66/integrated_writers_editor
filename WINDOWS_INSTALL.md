@@ -172,9 +172,13 @@ wrote it). Before treating a built installer as production-ready:
   step — EnterpriseDB's plain-zip binaries aren't served through a stable, documented API the
   way Node/Python/Qdrant's are (see the comment in `bundle.ps1` for details), so this is the
   step most likely to need adjustment if a URL pattern changes.
-- Confirm `pip install -r apps/api/requirements.txt` succeeds against the actual **embeddable**
-  Python distribution, not just a normal `venv` — wheels with native extensions
-  (`psycopg2-binary`, `grpcio`, etc.) can behave differently there.
+- ~~Confirm `pip install -r apps/api/requirements.txt` succeeds against the actual **embeddable**
+  Python distribution~~ — tested on a real machine: it initially failed with
+  `No module named pip` on the `-m pip install -r requirements.txt` step, even though
+  `get-pip.py` itself reported success just before it. Root cause: uncommenting `import site` in
+  the embeddable distribution's `._pth` file isn't enough by itself — that file also needs an
+  explicit `Lib\site-packages` line, or nothing after `get-pip.py` can actually find where pip
+  was installed. Fixed in `bundle.ps1`; if you hit this again, that's the first place to check.
 - Run `launch.ps1` and `stop.ps1` on a real machine and confirm every process actually starts,
   serves traffic, and stops cleanly (`stop.ps1`'s close/force-kill sequence for `qdrant.exe`/
   `node.exe`/`python.exe` in particular).
