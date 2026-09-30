@@ -179,6 +179,11 @@ wrote it). Before treating a built installer as production-ready:
   the embeddable distribution's `._pth` file isn't enough by itself — that file also needs an
   explicit `Lib\site-packages` line, or nothing after `get-pip.py` can actually find where pip
   was installed. Fixed in `bundle.ps1`; if you hit this again, that's the first place to check.
+  A second real-machine run then hit `BackendUnavailable: Cannot import 'setuptools.build_meta'`
+  while building `editor-common` from its git source (the embeddable distribution ships with
+  neither `setuptools` nor `wheel`, needed as the build backend for a VCS dependency with no
+  prebuilt wheel) — also fixed in `bundle.ps1`, by installing `setuptools`/`wheel` right after
+  `get-pip.py` and before installing `requirements.txt`.
 - Run `launch.ps1` and `stop.ps1` on a real machine and confirm every process actually starts,
   serves traffic, and stops cleanly (`stop.ps1`'s close/force-kill sequence for `qdrant.exe`/
   `node.exe`/`python.exe` in particular).
