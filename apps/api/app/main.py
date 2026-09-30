@@ -367,6 +367,7 @@ def _system_settings_out(db):
   ollama_url=cfg.ollama_url,ollama_url_is_override=override(row.ollama_url if row else None),
   ollama_model=cfg.ollama_model,ollama_model_is_override=override(row.ollama_model if row else None),
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
+  ollama_api_key_is_set=bool(cfg.ollama_api_key),
   ai_provider=cfg.ai_provider,
   anthropic_api_key_is_set=bool(cfg.anthropic_api_key),anthropic_model=cfg.anthropic_model,
   openai_api_key_is_set=bool(cfg.openai_api_key),openai_model=cfg.openai_model,
@@ -404,7 +405,7 @@ def system_settings_test_connection(x:ConnectionTestRequest):
   ok,msg,ms=connection_test.test_qdrant(x.url)
  elif x.target=='ollama':
   if not x.url:raise HTTPException(400,'url is required')
-  ok,msg,ms=connection_test.test_ollama(x.url,x.model)
+  ok,msg,ms=connection_test.test_ollama(x.url,x.model,x.api_key)
  elif x.target=='anthropic':
   ok,msg,ms=connection_test.test_anthropic(x.api_key or '',x.model)
  elif x.target=='openai':

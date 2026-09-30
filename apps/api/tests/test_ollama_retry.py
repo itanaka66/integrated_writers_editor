@@ -48,9 +48,10 @@ class _FlakyClient:
     async def __aexit__(self, *a):
         return False
 
-    async def post(self, url, json):
+    async def post(self, url, json, headers=None):
         _FlakyClient.calls["count"] += 1
         _FlakyClient.last_json = json
+        _FlakyClient.last_headers = headers
         if _FlakyClient.calls["count"] <= self.fail_times:
             raise httpx.ConnectError("connection refused")
         return _FakeResponse(self.payload)
@@ -104,3 +105,28 @@ def test_generate_sends_the_configured_generation_options_for_the_rtx3090_host(m
 
     asyncio.run(ollama.generate("hello", model="test-model"))
     assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS_RTX3090
+
+
+def test_generate_sends_no_authorization_header_when_no_api_key_is_configured(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert not _FlakyClient.last_headers
+
+
+def test_generate_sends_authorization_bearer_header_when_an_api_key_is_configured(monkeypatch):
+    keyed_config = EffectiveConfig(
+        qdrant_url="http://qdrant:6333",
+        ollama_url="http://ollama:11434",
+        ollama_model="stub-writer-model",
+        ollama_embed_model="stub-embed-model",
+        ollama_api_key="secret-token",
+    )
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: keyed_config)
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert _FlakyClient.last_headers == {"Authorization": "Bearer secret-token"}

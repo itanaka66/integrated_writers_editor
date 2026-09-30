@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
  model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
- database_url:str='postgresql+psycopg2://writers:writers@localhost:5432/writers'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='*'
+ database_url:str='postgresql+psycopg2://writers:writers@localhost:5432/writers'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; ollama_api_key:str=''; cors_origins:str='*'
  admin_username:str='admin'; admin_password:str='writers-studio-change-me'
  # Which AI backend /ai/generate, chat, and material summarization use.
  # 'ollama' (default) keeps everything local; the others call out to the

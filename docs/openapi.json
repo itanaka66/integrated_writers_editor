@@ -3842,6 +3842,10 @@
             "type": "boolean",
             "title": "Ollama Embed Model Is Override"
           },
+          "ollama_api_key_is_set": {
+            "type": "boolean",
+            "title": "Ollama Api Key Is Set"
+          },
           "ai_provider": {
             "type": "string",
             "title": "Ai Provider"
@@ -3899,6 +3903,7 @@
           "ollama_model_is_override",
           "ollama_embed_model",
           "ollama_embed_model_is_override",
+          "ollama_api_key_is_set",
           "ai_provider",
           "anthropic_api_key_is_set",
           "anthropic_model",
@@ -3956,6 +3961,17 @@
               }
             ],
             "title": "Ollama Embed Model"
+          },
+          "ollama_api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ollama Api Key"
           },
           "ai_provider": {
             "anyOf": [

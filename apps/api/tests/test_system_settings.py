@@ -69,6 +69,30 @@ def test_ai_provider_defaults_to_ollama(client):
     assert body["anthropic_api_key_is_set"] is False
     assert body["openai_api_key_is_set"] is False
     assert body["google_api_key_is_set"] is False
+    assert body["ollama_api_key_is_set"] is False
+
+
+def test_setting_an_ollama_api_key_never_echoes_the_value_back(client):
+    r = client.put("/api/v1/system-settings", json={"ollama_api_key": "ollama-secret-token"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ollama_api_key_is_set"] is True
+    assert "ollama_api_key" not in body
+    assert "ollama-secret-token" not in r.text
+
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["ollama_api_key_is_set"] is True
+    assert "ollama-secret-token" not in r.text
+
+
+def test_clearing_an_ollama_api_key_with_empty_string(client):
+    client.put("/api/v1/system-settings", json={"ollama_api_key": "ollama-secret"})
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["ollama_api_key_is_set"] is True
+
+    client.put("/api/v1/system-settings", json={"ollama_api_key": ""})
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["ollama_api_key_is_set"] is False
 
 
 def test_setting_an_api_key_never_echoes_the_value_back(client):

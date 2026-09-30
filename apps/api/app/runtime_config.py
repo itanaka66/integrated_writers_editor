@@ -23,6 +23,7 @@ class EffectiveConfig:
     ollama_url: str
     ollama_model: str
     ollama_embed_model: str
+    ollama_api_key: str = ''
     ai_provider: str = 'ollama'
     anthropic_api_key: str = ''
     anthropic_model: str = ''
@@ -60,6 +61,7 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_url=_pick(row.ollama_url if row else None, env_settings.ollama_url),
         ollama_model=_pick(row.ollama_model if row else None, env_settings.ollama_model),
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
+        ollama_api_key=_pick(row.ollama_api_key if row else None, env_settings.ollama_api_key),
         ai_provider=_pick(row.ai_provider if row else None, env_settings.ai_provider),
         anthropic_api_key=_pick(row.anthropic_api_key if row else None, env_settings.anthropic_api_key),
         anthropic_model=_pick(row.anthropic_model if row else None, env_settings.anthropic_model),

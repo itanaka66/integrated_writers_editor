@@ -22,6 +22,7 @@ const systemSettings = {
   ollama_url: "http://ollama:11434", ollama_url_is_override: false,
   ollama_model: "qwen3.8:27b", ollama_model_is_override: false,
   ollama_embed_model: "nomic-embed-text", ollama_embed_model_is_override: false,
+  ollama_api_key_is_set: false,
   ai_provider: "ollama",
   anthropic_api_key_is_set: false, anthropic_model: "claude-sonnet-4-5",
   openai_api_key_is_set: false, openai_model: "gpt-4o-mini",
@@ -61,6 +62,7 @@ describe("SettingsPanel AI provider section", () => {
     expect(body).not.toHaveProperty("anthropic_api_key");
     expect(body).not.toHaveProperty("openai_api_key");
     expect(body).not.toHaveProperty("google_api_key");
+    expect(body).not.toHaveProperty("ollama_api_key");
   });
 
   it("typing a new API key includes it in the save payload", async () => {
@@ -77,6 +79,22 @@ describe("SettingsPanel AI provider section", () => {
     await waitFor(() => expect(put).toHaveBeenCalled());
     const body = vi.mocked(put).mock.calls[0][1] as Record<string, unknown>;
     expect(body.anthropic_api_key).toBe("sk-ant-newkey");
+  });
+
+  it("typing a new Ollama API key includes it in the save payload", async () => {
+    vi.mocked(api).mockResolvedValue(systemSettings);
+    vi.mocked(put).mockResolvedValue(systemSettings);
+    render(<SettingsPanel project={project} onSaved={() => {}} />);
+
+    fireEvent.click(screen.getByText("接続設定"));
+    await waitFor(() => expect(screen.getByText(/Ollama APIキー/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText("認証が必要なリモート/プロキシ経由のOllamaのみ"), { target: { value: "ollama-newkey" } });
+    fireEvent.click(screen.getAllByText("保存")[0]);
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    const body = vi.mocked(put).mock.calls[0][1] as Record<string, unknown>;
+    expect(body.ollama_api_key).toBe("ollama-newkey");
   });
 });
 

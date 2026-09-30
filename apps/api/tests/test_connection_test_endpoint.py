@@ -38,9 +38,10 @@ def test_test_connection_qdrant(client, monkeypatch):
 def test_test_connection_ollama_with_model(client, monkeypatch):
     captured = {}
 
-    def fake(url, model=None):
+    def fake(url, model=None, api_key=None):
         captured["url"] = url
         captured["model"] = model
+        captured["api_key"] = api_key
         return (False, "モデルが見つかりません", 20)
 
     monkeypatch.setattr(connection_test, "test_ollama", fake)
@@ -49,6 +50,20 @@ def test_test_connection_ollama_with_model(client, monkeypatch):
     body = r.json()
     assert body["ok"] is False
     assert captured["model"] == "qwen3:14b"
+    assert captured["api_key"] is None
+
+
+def test_test_connection_ollama_with_api_key(client, monkeypatch):
+    captured = {}
+
+    def fake(url, model=None, api_key=None):
+        captured["api_key"] = api_key
+        return (True, "接続に成功しました。", 10)
+
+    monkeypatch.setattr(connection_test, "test_ollama", fake)
+    r = client.post("/api/v1/system-settings/test-connection", json={"target": "ollama", "url": "http://ollama:11434", "api_key": "secret-token"})
+    assert r.status_code == 200
+    assert captured["api_key"] == "secret-token"
 
 
 def test_test_connection_unknown_target(client):

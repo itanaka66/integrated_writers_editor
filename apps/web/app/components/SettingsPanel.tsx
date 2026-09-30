@@ -21,6 +21,7 @@ type SystemSettings = {
   ollama_url: string; ollama_url_is_override: boolean;
   ollama_model: string; ollama_model_is_override: boolean;
   ollama_embed_model: string; ollama_embed_model_is_override: boolean;
+  ollama_api_key_is_set: boolean;
   ai_provider: string;
   anthropic_api_key_is_set: boolean; anthropic_model: string;
   openai_api_key_is_set: boolean; openai_model: string;
@@ -93,6 +94,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [sys, setSys] = useState<SystemSettings | null>(null);
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
+    ollama_api_key: "",
     ai_provider: "ollama",
     anthropic_api_key: "", anthropic_model: "",
     openai_api_key: "", openai_model: "",
@@ -153,6 +155,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSysForm({
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
         ollama_embed_model: s.ollama_embed_model,
+        ollama_api_key: "",
         ai_provider: s.ai_provider,
         anthropic_api_key: "", anthropic_model: s.anthropic_model,
         openai_api_key: "", openai_model: s.openai_model,
@@ -289,6 +292,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     setSysForm({
       qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
       ollama_embed_model: s.ollama_embed_model,
+      ollama_api_key: "",
       ai_provider: s.ai_provider,
       // API keys never come back from the server (see SystemSettingsOut) —
       // always reset these to blank so re-saving unrelated fields can't
@@ -305,11 +309,12 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       // Blank api_key fields mean "leave unchanged" here, not "clear" — only
       // send them when the user actually typed a new key. Clearing a key is
       // a separate explicit action (the "クリア" button -> resetField).
-      const { anthropic_api_key, openai_api_key, google_api_key, ...rest } = sysForm;
+      const { anthropic_api_key, openai_api_key, google_api_key, ollama_api_key, ...rest } = sysForm;
       const payload: Record<string, string> = { ...rest };
       if (anthropic_api_key) payload.anthropic_api_key = anthropic_api_key;
       if (openai_api_key) payload.openai_api_key = openai_api_key;
       if (google_api_key) payload.google_api_key = google_api_key;
+      if (ollama_api_key) payload.ollama_api_key = ollama_api_key;
       const s: SystemSettings = await put("/system-settings", payload);
       applySettingsResponse(s);
       setSysSaved(true);
@@ -477,7 +482,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 <input value={sysForm.ollama_url} onChange={(e) => setSysForm({ ...sysForm, ollama_url: e.target.value })} placeholder="http://ollama:11434" />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="ollama" url={sysForm.ollama_url} model={sysForm.ollama_model} />
+                <TestButton target="ollama" url={sysForm.ollama_url} model={sysForm.ollama_model} apiKey={sysForm.ollama_api_key} />
                 {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
               </div>
 
@@ -492,8 +497,17 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 <input value={sysForm.ollama_embed_model} onChange={(e) => setSysForm({ ...sysForm, ollama_embed_model: e.target.value })} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} />
+                <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} apiKey={sysForm.ollama_api_key} />
                 {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
+              </div>
+
+              <label>
+                Ollama APIキー（任意） {sys.ollama_api_key_is_set && <span className="savedNote">（設定済み）</span>}
+                <input type="password" value={sysForm.ollama_api_key} onChange={(e) => setSysForm({ ...sysForm, ollama_api_key: e.target.value })} placeholder={sys.ollama_api_key_is_set ? "変更する場合のみ入力" : "認証が必要なリモート/プロキシ経由のOllamaのみ"} />
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="ollama" resultKey="ollama_api_key" url={sysForm.ollama_url} model={sysForm.ollama_model} apiKey={sysForm.ollama_api_key} />
+                {sys.ollama_api_key_is_set && <button type="button" onClick={() => resetField("ollama_api_key")} disabled={sysBusy}>クリア</button>}
               </div>
 
               <label style={{ gridColumn: "1/-1" }}>

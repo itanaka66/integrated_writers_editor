@@ -102,6 +102,7 @@ class RuntimeConfig(Base):
     ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
     ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     ollama_embed_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    ollama_api_key:Mapped[str|None]=mapped_column(String(300),nullable=True)
     ai_provider:Mapped[str|None]=mapped_column(String(20),nullable=True)
     anthropic_api_key:Mapped[str|None]=mapped_column(String(300),nullable=True)
     anthropic_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
