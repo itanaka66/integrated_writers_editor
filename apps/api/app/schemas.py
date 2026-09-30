@@ -70,7 +70,7 @@ class ConnectionTestRequest(BaseModel):
     target:str # 'database' | 'qdrant' | 'ollama' | 'anthropic' | 'openai' | 'google'
     url:str|None=None # ignored for 'database'; tests whatever value the form currently holds, saved or not
     model:str|None=None # checks the model is available, not just reachable (all targets except 'database'/'qdrant')
-    api_key:str|None=None # 'anthropic' / 'openai' / 'google' only
+    api_key:str|None=None # 'anthropic' / 'openai' / 'google' / 'ollama' (optional)
 
 class ConnectionTestResult(BaseModel):
     ok:bool; message:str; latency_ms:int
@@ -94,6 +94,7 @@ class SystemSettingsOut(BaseModel):
     ollama_url:str; ollama_url_is_override:bool
     ollama_model:str; ollama_model_is_override:bool
     ollama_embed_model:str; ollama_embed_model_is_override:bool
+    ollama_api_key_is_set:bool
     ai_provider:str
     anthropic_api_key_is_set:bool; anthropic_model:str
     openai_api_key_is_set:bool; openai_model:str
@@ -128,6 +129,7 @@ class SystemSettingsUpdate(BaseModel):
     ollama_url:str|None=None
     ollama_model:str|None=None
     ollama_embed_model:str|None=None
+    ollama_api_key:str|None=None
     ai_provider:str|None=None
     anthropic_api_key:str|None=None
     anthropic_model:str|None=None

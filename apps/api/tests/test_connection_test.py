@@ -41,7 +41,7 @@ def test_ollama_reports_model_missing(monkeypatch):
         def json(self):
             return {"models": [{"name": "other-model:latest"}]}
 
-    def fake_get(url, timeout):
+    def fake_get(url, headers=None, timeout=None):
         return _FakeResponse()
 
     monkeypatch.setattr(common_connection_test.httpx, "get", fake_get)
@@ -58,10 +58,30 @@ def test_ollama_reports_model_present(monkeypatch):
         def json(self):
             return {"models": [{"name": "qwen3:8b"}]}
 
-    def fake_get(url, timeout):
+    def fake_get(url, headers=None, timeout=None):
         return _FakeResponse()
 
     monkeypatch.setattr(common_connection_test.httpx, "get", fake_get)
     ok, msg, ms = connection_test.test_ollama("http://ollama:11434", "qwen3:8b")
     assert ok is True
     assert "成功" in msg
+
+
+def test_ollama_sends_authorization_bearer_header_when_api_key_given(monkeypatch):
+    captured = {}
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"models": []}
+
+    def fake_get(url, headers=None, timeout=None):
+        captured["headers"] = headers
+        return _FakeResponse()
+
+    monkeypatch.setattr(common_connection_test.httpx, "get", fake_get)
+    ok, msg, ms = connection_test.test_ollama("http://ollama:11434", api_key="secret-token")
+    assert ok is True
+    assert captured["headers"] == {"Authorization": "Bearer secret-token"}
