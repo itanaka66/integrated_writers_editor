@@ -25,12 +25,37 @@ for what each `.env` variable does).
   Linux/macOS.
 - `stop.ps1` — `docker compose down`.
 
-Building it: `installer/windows/build.ps1` on a Windows machine with Inno Setup 6 (`iscc.exe` on
-`PATH`) compiles `ine.iss` into `dist/INE-Setup-<version>.exe`. It does not build any Docker
-images itself — those are published to GHCR by
+### Building it
+
+Prerequisites, once, on a Windows machine:
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id JRSoftware.InnoSetup
+# (or: choco install git innosetup)
+```
+
+Make sure `iscc.exe` (Inno Setup's compiler) ends up on `PATH` — the installer above normally
+adds it under `C:\Program Files (x86)\Inno Setup 6\`; add that folder to `PATH` if
+`iscc.exe`/`ISCC.exe` isn't found in a fresh terminal.
+
+Then, from a clone of this repo:
+
+```powershell
+git clone https://github.com/itanaka66/integrated_writers_editor.git
+cd integrated_writers_editor
+./installer/windows/build.ps1
+```
+
+This compiles `ine.iss` (which packages `docker-compose.release.yml`, `.env.example`, and
+`launch.ps1`/`stop.ps1`) into `dist/INE-Setup-<version>.exe` — that one file is the installer;
+hand it to anyone with Docker Desktop already installed.
+
+It does **not** build any Docker images itself — those are published to GHCR by
 [`docker-publish.yml`](.github/workflows/docker-publish.yml) (`docker-compose.release.yml`,
-bundled into the installer, just pulls them at first launch) — run that workflow, or push a
-version tag, before shipping an installer built from this script.
+bundled into the installer, just pulls them at first launch). Run that workflow (or push a
+version tag, which triggers it automatically) before shipping an installer built from this
+script, or the freshly-installed app will have nothing to pull on first launch.
 
 ## Docker-free installer (`installer/windows-native/`)
 
@@ -92,22 +117,48 @@ projects aren't wiped by an uninstall unless you confirm that.
 
 ### Building it
 
-`bundle.ps1` downloads several hundred MB and isn't something to run repeatedly by hand — it's
-meant to run in
-[`.github/workflows/build-native-windows-installer.yml`](.github/workflows/build-native-windows-installer.yml)
-on a `windows-latest` GitHub Actions runner, which then compiles `ine-native.iss` with Inno
-Setup's `ISCC.exe` and uploads/releases the resulting installer. Triggered the same way as
-`docker-publish.yml` — a version tag push, or manually via `workflow_dispatch`.
+`bundle.ps1` downloads several hundred MB (Node, Python, Qdrant, PostgreSQL) and isn't something
+to run repeatedly by hand — the primary way to build this installer is CI, not a local machine:
 
-It can also be run by hand on a real Windows machine with Git and Inno Setup 6 (`iscc.exe` on
-`PATH`) installed, via the single wrapper script that runs both steps end-to-end:
+**Option 1 — GitHub Actions (recommended):** push a version tag (e.g. `v1.2.0`), or trigger
+[`build-native-windows-installer.yml`](.github/workflows/build-native-windows-installer.yml)
+manually from the Actions tab (`workflow_dispatch`) — same trigger style as `docker-publish.yml`.
+It runs on a `windows-latest` runner, does everything below for you, and uploads/releases the
+resulting installer as a build artifact. No local Windows machine needed at all.
+
+**Option 2 — a real Windows machine.** Prerequisites, once:
 
 ```powershell
-installer/windows-native/build.ps1
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.13
+winget install -e --id JRSoftware.InnoSetup
+# (or: choco install git python innosetup)
 ```
 
-This runs `bundle.ps1` (downloads/stages the runtimes) followed by `ISCC.exe` (compiles
-`ine-native.iss`), producing `dist/INE-Native-Setup-<version>.exe`.
+(Git is needed because `pip` must resolve `apps/api/requirements.txt`'s
+`editor-common @ git+https://...` dependency; a local Python isn't strictly required to *run*
+the bundled app — the embeddable Python is what actually ships — but `bundle.ps1` uses a local
+`pip`/`python` to bootstrap the embeddable one.)
+
+Then, from a clone of this repo:
+
+```powershell
+git clone https://github.com/itanaka66/integrated_writers_editor.git
+cd integrated_writers_editor
+./installer/windows-native/build.ps1
+```
+
+Expect this to take several minutes (multiple large downloads). It runs `bundle.ps1` (stages
+Node/Python/Qdrant/PostgreSQL plus this repo's `api`/`web` code into `dist-native/`) followed by
+`ISCC.exe` (compiles `ine-native.iss` against that staged directory), producing
+`dist/INE-Native-Setup-<version>.exe` — that one file is the installer; hand it to anyone,
+regardless of what they have installed.
+
+`bundle.ps1` caches each downloaded archive under a download folder and skips re-fetching a file
+that's already there, so re-running `build.ps1` after only touching a script (not
+`apps/api`/`apps/web` source) is much faster the second time. Delete that cache (or the whole
+staging directory `bundle.ps1` builds into) first if you want a guaranteed-clean rebuild from
+scratch.
 
 ### Known limitations / what to double-check before relying on this
 
