@@ -149,11 +149,21 @@ Expand-Archive -Path $pyZip -DestinationPath $pyDistDir -Force
 
 # The embeddable distribution ships with a `pythonXY._pth` file that, by
 # default, EXCLUDES `site` (so `site-packages`/pip aren't importable at
-# all). We must uncomment the `import site` line before pip will work.
+# all) AND only lists the interpreter's own zip/stdlib paths — it does
+# NOT list `Lib\site-packages` at all. Uncommenting `import site` alone
+# is not enough: get-pip.py itself still works afterward (it unpacks a
+# bundled pip wheel and manipulates sys.path directly, without needing
+# site-packages to already be on the path), which is why that step can
+# report success — but every *subsequent* `python.exe -m pip ...`
+# invocation then fails with "No module named pip", because the
+# interpreter's sys.path still has no route to where pip was actually
+# installed. Confirmed by hand against a real Windows machine — this
+# fix (appending an explicit `Lib\site-packages` line) resolved it.
 $pthFile = Get-ChildItem $pyDistDir -Filter "python*._pth" | Select-Object -First 1
 if (-not $pthFile) { throw "Could not find python*._pth in the embeddable package — layout may have changed." }
 (Get-Content $pthFile.FullName) -replace '^#\s*import site', 'import site' | Set-Content $pthFile.FullName
-Write-Host "    enabled 'import site' in $($pthFile.Name)"
+Add-Content -Path $pthFile.FullName -Value "Lib\site-packages"
+Write-Host "    enabled 'import site' and added Lib\site-packages in $($pthFile.Name)"
 
 Write-Step "Bootstrapping pip into the embedded interpreter"
 $getPip = Join-Path $DownloadDir "get-pip.py"
