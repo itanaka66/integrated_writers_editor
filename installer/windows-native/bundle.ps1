@@ -245,6 +245,21 @@ if (-not (Test-Path $pgSrc)) {
     $pgSrc = (Get-ChildItem $pgExtractTmp -Directory | Select-Object -First 1).FullName
 }
 Copy-Item -Path (Join-Path $pgSrc "*") -Destination $pgDistDir -Recurse -Force
+# EDB's zip also bundles pgAdmin 4 (a full GUI admin app, including its
+# own Python web source tree), StackBuilder, C headers (include\), and
+# debug symbols — none of which `launch.ps1` ever uses (it only runs
+# initdb/pg_ctl/postgres.exe directly). Prune them: pgAdmin 4's own
+# source tree in particular has extremely deep, descriptively-named
+# paths (e.g. ...\pgadmin\browser\server_groups\servers\databases\
+# foreign_data_wrappers\foreign_servers\user_mappings\templates\...)
+# that, combined with this repo's own path depth, exceeded Windows's
+# 260-char MAX_PATH and made Inno Setup's compiler abort mid-compression
+# with "指定されたパスが見つかりません" (path not found) — confirmed by
+# hand against a real Windows machine.
+foreach ($unused in @("pgAdmin 4", "StackBuilder", "include", "symbols", "doc")) {
+    $p = Join-Path $pgDistDir $unused
+    if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+}
 # Note: no `data\` directory is bundled here — launch.ps1 runs `initdb`
 # against a local, writable data directory on first run (never inside
 # Program Files, which is typically not writable by a non-admin user).

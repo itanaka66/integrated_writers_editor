@@ -195,6 +195,13 @@ wrote it). Before treating a built installer as production-ready:
   real and is now fixed — Inno Setup's own installer never adds it to `PATH`; `build.ps1` (both
   `installer/windows/` and `installer/windows-native/`) now also checks Inno Setup 6's default
   install locations and its App Paths registry entry before giving up.
+  A fourth real-machine run then hit the exact same "指定されたパスが見つかりません" compiler
+  error again, this time deep inside **pgAdmin 4** (the bundled PostgreSQL zip's full GUI admin
+  app, with its own Python web source tree — e.g.
+  `...\pgadmin\browser\server_groups\servers\databases\foreign_data_wrappers\foreign_servers\user_mappings\templates\...`
+  — never used, since `launch.ps1` only ever runs `initdb`/`pg_ctl`/`postgres.exe` directly).
+  Fixed by pruning `pgAdmin 4`, `StackBuilder`, `include` (C headers), `symbols`, and `doc` from
+  the bundled Postgres directory after copying it.
 - Run `launch.ps1` and `stop.ps1` on a real machine and confirm every process actually starts,
   serves traffic, and stops cleanly (`stop.ps1`'s close/force-kill sequence for `qdrant.exe`/
   `node.exe`/`python.exe` in particular).
