@@ -128,12 +128,19 @@ Expand-Archive -Path $nodeZip -DestinationPath $nodeExtractTmp -Force
 $nodeDistDir = Join-Path $DistDir "runtime\node"
 if (Test-Path $nodeDistDir) { Remove-Item -Recurse -Force $nodeDistDir }
 New-Item -ItemType Directory -Force -Path $nodeDistDir | Out-Null
-# The zip contains one top-level `node-v<ver>-win-x64\` folder with
-# node.exe plus the DLLs/licenses it ships alongside — copy the whole
-# thing rather than hand-picking files, since Node's own DLL set can
-# change between versions and node.exe expects them next to it.
+# The zip's top-level `node-v<ver>-win-x64\` folder also bundles npm,
+# corepack, and npm's OWN node_modules tree — none of which this app
+# needs (the standalone Next.js server only ever runs `node server.js`,
+# never `npm`). Copying the whole folder dragged that deeply-nested
+# node_modules tree into dist-native\, and several of those paths
+# combined with this repo's own path depth exceeded Windows's 260-char
+# MAX_PATH, which made Inno Setup's compiler fail with "指定されたパスが
+# 見つかりません" ("the specified path was not found") while compressing
+# them — confirmed by hand against a real Windows machine. The official
+# Windows x64 node.exe is self-contained (no sibling DLLs required), so
+# copy just that one file.
 $nodeSrc = Get-ChildItem $nodeExtractTmp -Directory | Select-Object -First 1
-Copy-Item -Path (Join-Path $nodeSrc.FullName "*") -Destination $nodeDistDir -Recurse -Force
+Copy-Item -Path (Join-Path $nodeSrc.FullName "node.exe") -Destination $nodeDistDir -Force
 
 # ------------------------------------------------------------------
 # 2. Python embeddable runtime + pip + api requirements

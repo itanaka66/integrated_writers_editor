@@ -35,9 +35,9 @@ winget install -e --id JRSoftware.InnoSetup
 # (or: choco install git innosetup)
 ```
 
-Make sure `iscc.exe` (Inno Setup's compiler) ends up on `PATH` — the installer above normally
-adds it under `C:\Program Files (x86)\Inno Setup 6\`; add that folder to `PATH` if
-`iscc.exe`/`ISCC.exe` isn't found in a fresh terminal.
+Inno Setup's own installer does **not** add `iscc.exe` to `PATH` — `build.ps1` looks for it at
+its default install location (`C:\Program Files (x86)\Inno Setup 6\`) and in the registry
+automatically, so no `PATH` changes are needed unless you installed it somewhere non-standard.
 
 Then, from a clone of this repo:
 
@@ -184,6 +184,17 @@ wrote it). Before treating a built installer as production-ready:
   neither `setuptools` nor `wheel`, needed as the build backend for a VCS dependency with no
   prebuilt wheel) — also fixed in `bundle.ps1`, by installing `setuptools`/`wheel` right after
   `get-pip.py` and before installing `requirements.txt`.
+  A third real-machine run got as far as `iscc.exe` actually compiling, then aborted mid-way
+  through compressing files with "指定されたパスが見つかりません" (path not found) — caused by
+  `bundle.ps1` copying the *entire* Node.js distribution folder, including npm's own deeply
+  nested `node_modules` tree (needed to run `npm`, which this app never does — only
+  `node server.js`), several levels of which exceeded Windows's 260-character `MAX_PATH` once
+  combined with this repo's own path depth. Fixed by copying only `node.exe` itself (the
+  official Windows build has no sibling DLLs to worry about).
+  Separately, `iscc.exe` not being found even with Inno Setup 6 actually installed was also
+  real and is now fixed — Inno Setup's own installer never adds it to `PATH`; `build.ps1` (both
+  `installer/windows/` and `installer/windows-native/`) now also checks Inno Setup 6's default
+  install locations and its App Paths registry entry before giving up.
 - Run `launch.ps1` and `stop.ps1` on a real machine and confirm every process actually starts,
   serves traffic, and stops cleanly (`stop.ps1`'s close/force-kill sequence for `qdrant.exe`/
   `node.exe`/`python.exe` in particular).
