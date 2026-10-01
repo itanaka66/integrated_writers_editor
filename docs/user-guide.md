@@ -52,6 +52,13 @@ The core writing screen, three columns:
 
   Tools that require a sub-choice (記事構成作成, 複数媒体への変換) show a picker before sending. Results appear in the AI result box; "＋ 本文に追加" appends them to the article body.
 - **Editor toolbar**: B / I / H / ❝ buttons wrap the current selection (or insert at the cursor) with Markdown syntax (`**bold**`, `*italic*`, `## heading`, `> quote`) — the stored content is always plain Markdown text. "プレビュー" renders that Markdown to HTML; "編集に戻る" switches back to the raw textarea. "📋 Wordにコピー" copies the body's Markdown to the clipboard as HTML (with a plain-text fallback), so pasting into Word renders formatting correctly instead of literal `**`/`##` characters. A live character count (whitespace excluded) is shown next to the toolbar.
+
+  Next to that, "📥 Wordから読み込み" and "📤 Wordでダウンロード" exchange an actual `.docx` file instead of the clipboard:
+
+  - **📥 Wordから読み込み (Import from Word)**: pick a `.docx` file and its content **replaces** this episode's body (after a confirmation prompt). The previous content is still kept in history (🕘), so an accidental import can be undone.
+  - **📤 Wordでダウンロード (Download as Word)**: exports the current body as a `.docx` file download.
+
+  Both only round-trip the same four constructs the editor's toolbar supports — **bold**, *italic*, headings, and quotes. Tables, images, lists, and links are flattened to plain text on import and are never produced on export — keep this in mind for episodes that exchange Word files with people outside the app, since anything beyond that (e.g. tables) will be lost.
 - **🕘 履歴 (revision history)**: every time you save different content than what was there before, the previous version is snapshotted (kept up to 20 per episode). This button lists them with a "この版に復元" (restore) action — restoring itself snapshots the version you're leaving, so restoring is itself undoable.
 
 
