@@ -1,7 +1,7 @@
 "use client";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
-import { api, post, put, del, streamSSE } from "../lib/api";
+import { api, post, put, del, streamSSE, postFile, downloadFile } from "../lib/api";
 import { Episode, Project, Source, Template } from "../lib/types";
 import { useVoiceInput } from "../lib/useVoiceInput";
 import { useResizableWidth } from "../lib/useResizableWidth";
@@ -95,6 +95,7 @@ export default function WritePanel({ project }: { project: Project }) {
   const leftPanel = useResizableWidth("ine-write-left-width", { defaultWidth: 190, min: 140, max: 320, direction: "left" });
   const rightPanel = useResizableWidth("ine-write-right-width", { defaultWidth: 280, min: 220, max: 460, direction: "right" });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const docxInputRef = useRef<HTMLInputElement | null>(null);
   const voice = useVoiceInput((text) => {
     if (!e) return;
     const ta = textareaRef.current;
@@ -262,6 +263,28 @@ export default function WritePanel({ project }: { project: Project }) {
     }
   }
 
+  function openDocxImport() {
+    if (!e) return;
+    if (!confirm("Wordファイルの内容で本文を上書きします。現在の内容は失われます（履歴からの復元は可能です）。よろしいですか？")) return;
+    docxInputRef.current?.click();
+  }
+  async function handleDocxImportFile(file: File) {
+    if (!e) return;
+    try {
+      const x = await postFile(`/episodes/${e.id}/docx-import`, file);
+      setE(x); setEs(es.map((v) => (v.id === x.id ? x : v)));
+      setCopyStatus("Wordファイルを読み込みました");
+    } catch {
+      setCopyStatus("Wordファイルの読み込みに失敗しました。");
+    } finally {
+      setTimeout(() => setCopyStatus(null), 3000);
+    }
+  }
+  async function downloadDocx() {
+    if (!e) return;
+    await downloadFile(`/episodes/${e.id}/docx-export`, `${e.title}.docx`);
+  }
+
   const checklist = e ? [
     { label: "タイトルが入力されている", ok: !!e.title.trim() },
     { label: "概要（サマリー）が入力されている", ok: !!e.summary.trim() },
@@ -353,6 +376,19 @@ export default function WritePanel({ project }: { project: Project }) {
             <button className={voice.listening ? "on" : ""} onClick={voice.toggle} title="音声入力">{voice.listening ? "⏹ 停止" : "🎤 音声入力"}</button>
           )}
           <button onClick={copyForWord} title="太字・見出しなどの書式を保ったまま、Wordなどに貼り付けられる形式でコピーします">📋 Wordにコピー</button>
+          <button onClick={openDocxImport} title="Wordファイル（.docx）を読み込み、本文を置き換えます">📥 Wordから読み込み</button>
+          <input
+            ref={docxInputRef}
+            type="file"
+            accept=".docx"
+            style={{ display: "none" }}
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              if (file) handleDocxImportFile(file);
+              ev.target.value = "";
+            }}
+          />
+          <button onClick={downloadDocx} title="本文をWordファイル（.docx）としてダウンロードします">📤 Wordでダウンロード</button>
           {copyStatus && <span className="savedNote">{copyStatus}</span>}
           <span className="wordCount">{wordCount.toLocaleString()}文字</span>
         </div>

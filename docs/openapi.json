@@ -1319,6 +1319,92 @@
         }
       }
     },
+    "/api/v1/episodes/{eid}/docx-import": {
+      "post": {
+        "summary": "Episode Docx Import",
+        "operationId": "episode_docx_import_api_v1_episodes__eid__docx_import_post",
+        "parameters": [
+          {
+            "name": "eid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Eid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_episode_docx_import_api_v1_episodes__eid__docx_import_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/episodes/{eid}/docx-export": {
+      "get": {
+        "summary": "Episode Docx Export",
+        "operationId": "episode_docx_export_api_v1_episodes__eid__docx_export_get",
+        "parameters": [
+          {
+            "name": "eid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Eid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/episodes/{eid}/revisions": {
       "get": {
         "summary": "Episode Revisions",
@@ -2724,6 +2810,20 @@
           "backups"
         ],
         "title": "BackupStatusOut"
+      },
+      "Body_episode_docx_import_api_v1_episodes__eid__docx_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_episode_docx_import_api_v1_episodes__eid__docx_import_post"
       },
       "Body_import_episodes_api_v1_projects__pid__import_episodes_post": {
         "properties": {

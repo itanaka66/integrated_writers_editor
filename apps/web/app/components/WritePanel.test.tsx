@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import WritePanel from "./WritePanel";
-import { api, post, put, del, streamSSE } from "../lib/api";
+import { api, post, put, del, streamSSE, postFile, downloadFile } from "../lib/api";
 import { Project } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
@@ -10,6 +10,8 @@ vi.mock("../lib/api", () => ({
   put: vi.fn(),
   del: vi.fn(),
   streamSSE: vi.fn(),
+  postFile: vi.fn(),
+  downloadFile: vi.fn(),
 }));
 
 const project: Project = { id: 1, name: "P", description: "", genre: "", rules: "", style_guide: "" };
@@ -52,6 +54,8 @@ describe("WritePanel", () => {
     vi.mocked(put).mockReset();
     vi.mocked(del).mockReset();
     vi.mocked(streamSSE).mockReset();
+    vi.mocked(postFile).mockReset();
+    vi.mocked(downloadFile).mockReset();
   });
 
   it("opens the AI tool picker and runs a direct tool", async () => {
@@ -209,5 +213,46 @@ describe("WritePanel", () => {
     // check that's simply unavailable in this test environment.
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(episode.content));
     await waitFor(() => expect(screen.getByText(/コピーしました/)).toBeInTheDocument());
+  });
+
+  it("imports a docx file and replaces the displayed content", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    const updated = { ...episode, content: "Wordから読み込んだ本文" };
+    vi.mocked(postFile).mockResolvedValue(updated);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📥 Wordから読み込み")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📥 Wordから読み込み"));
+
+    const file = new File(["docx-bytes"], "import.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(postFile).toHaveBeenCalledWith(`/episodes/${episode.id}/docx-import`, file));
+    await waitFor(() => expect(screen.getByDisplayValue("Wordから読み込んだ本文")).toBeInTheDocument());
+  });
+
+  it("downloads the current episode as a docx file", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      if (path.includes("/sources")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    vi.mocked(downloadFile).mockResolvedValue(undefined);
+    render(<WritePanel project={project} />);
+
+    await waitFor(() => expect(screen.getByText("📤 Wordでダウンロード")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("📤 Wordでダウンロード"));
+
+    await waitFor(() =>
+      expect(downloadFile).toHaveBeenCalledWith(`/episodes/${episode.id}/docx-export`, `${episode.title}.docx`)
+    );
   });
 });

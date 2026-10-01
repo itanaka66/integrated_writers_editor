@@ -24,6 +24,7 @@ from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
 from . import materials
+from . import docx_convert
 from editor_common.users import (
  ensure_bootstrap_user,list_users,create_user,change_password,set_active,delete_user,
  UsernameTakenError,UserNotFoundError,get_or_create_oauth_user,authenticate_user,
@@ -525,6 +526,30 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
   logger.exception('RAG indexing failed for episode %s',eid)
   warnings.append('RAG索引の更新に失敗しました。意味検索の結果が古いままの可能性があります。')
  return EpisodeSaveOut(**EpisodeOut.model_validate(e).model_dump(),warnings=warnings)
+@app.post('/api/v1/episodes/{eid}/docx-import',response_model=EpisodeOut)
+async def episode_docx_import(eid:int,file:UploadFile=File(...),db:Session=Depends(get_db)):
+ e=db.get(Episode,eid)
+ if not e:raise HTTPException(404,'Episode not found')
+ raw=await file.read()
+ try:
+  content=docx_convert.docx_to_markdown(raw)
+ except Exception:
+  raise HTTPException(400,'Wordファイル（.docx）として読み込めませんでした。ファイル形式をご確認ください。')
+ if content!=e.content:snapshot_revision(db,e)
+ e.content=content
+ db.commit();db.refresh(e)
+ file_sync.write_episode_file(e.project,e)
+ try:
+  await index(chunks(e))
+ except Exception:
+  logger.exception('RAG indexing failed for episode %s after docx-import',eid)
+ return e
+@app.get('/api/v1/episodes/{eid}/docx-export')
+def episode_docx_export(eid:int,db:Session=Depends(get_db)):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ data=docx_convert.markdown_to_docx(e.content or '')
+ name=e.title or f'episode-{eid}'
+ return Response(data,media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':content_disposition(name,'docx')})
 @app.delete('/api/v1/episodes/{eid}',status_code=204)
 def episode_delete(eid:int,db:Session=Depends(get_db)):
  e=crud_get_or_404(db,Episode,eid,'Episode')
