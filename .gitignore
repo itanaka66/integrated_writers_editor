@@ -10,3 +10,6 @@ ollama/
 writers_storage/
 *.log
 .DS_Store
+.env.backup
+dist-native/
+dist/INE-Native-Setup-0.6.0.exe
