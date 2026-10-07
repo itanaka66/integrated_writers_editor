@@ -21,6 +21,20 @@ def isolate_writers_storage_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolate_qdrant(monkeypatch):
+    # app.rag resolves the Qdrant URL via get_effective_config() with no db
+    # argument, which reads the *real* configured database / environment —
+    # so on a machine whose .env or runtime settings point at a live Qdrant,
+    # tests that assume "no Qdrant" (save warnings, the Postgres search
+    # fallback) silently talk to it instead and fail. Pin every test to an
+    # address that refuses connections immediately.
+    from types import SimpleNamespace
+    from app import rag
+
+    monkeypatch.setattr(rag, "get_effective_config", lambda *a, **kw: SimpleNamespace(qdrant_url="http://127.0.0.1:1"))
+
+
+@pytest.fixture(autouse=True)
 def reset_login_rate_limit():
     # The brute-force guard in editor_common.auth keeps its failure counts
     # in a module-level dict, keyed by client IP — Starlette's TestClient
