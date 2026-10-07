@@ -40,13 +40,20 @@ def test_auth_providers_stays_false_when_only_partially_configured(monkeypatch):
     assert r.json() == {"google": False, "github": False}
 
 
-def test_oauth_login_route_404s_when_unconfigured():
+def test_oauth_login_route_404s_when_unconfigured(client):
     # No OAuth env configured in the default test settings, so
     # register_oauth_routes never ran and these routes simply don't exist —
     # nothing changes for a deployment that hasn't opted in.
-    c = TestClient(app)
-    r = c.get("/api/v1/auth/login/google", follow_redirects=False)
+    # Uses the authenticated `client`: with OAuth unconfigured, /auth/login/*
+    # isn't a public path, so an *unauthenticated* request is (correctly)
+    # rejected with 401 by the auth middleware before routing is ever
+    # consulted — only an authenticated request reaches the router to get
+    # the 404 this test is actually about.
+    r = client.get("/api/v1/auth/login/google", follow_redirects=False)
     assert r.status_code == 404
+
+    unauthenticated = TestClient(app).get("/api/v1/auth/login/google", follow_redirects=False)
+    assert unauthenticated.status_code == 401
 
 
 def test_auth_me_requires_auth():
