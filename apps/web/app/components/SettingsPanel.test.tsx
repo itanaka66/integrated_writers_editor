@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { LlmActivityProvider } from "../lib/llmActivity";
 import SettingsPanel from "./SettingsPanel";
 import { api, post, put } from "../lib/api";
 import { Project } from "../lib/types";
@@ -329,5 +330,23 @@ describe("SettingsPanel self password change", () => {
     fireEvent.click(screen.getByRole("button", { name: "パスワードを変更" }));
 
     await waitFor(() => expect(screen.getByText("現在のパスワードが正しくありません。")).toBeInTheDocument());
+  });
+});
+
+describe("SettingsPanel LLM progress dialog", () => {
+  it("shows the style-guide progress dialog during generation and closes it afterwards", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    vi.mocked(post).mockReset();
+    vi.mocked(post).mockImplementation(() => new Promise((r) => { resolve = r; }));
+    render(<LlmActivityProvider><SettingsPanel project={project} onSaved={() => {}} /></LlmActivityProvider>);
+
+    fireEvent.click(screen.getByText("📐 スタイルガイド生成"));
+    fireEvent.click(await screen.findByText("翻訳文書・ローカライズ"));
+
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByText("スタイルガイドを生成中です…")).toBeInTheDocument();
+
+    await act(async () => { resolve({ style_guide: "・訳語を統一する" }); });
+    await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull());
   });
 });

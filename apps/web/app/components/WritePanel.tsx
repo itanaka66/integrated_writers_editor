@@ -8,6 +8,7 @@ import { useResizableWidth } from "../lib/useResizableWidth";
 import DiffView from "./DiffView";
 import ProofreadPanel from "./ProofreadPanel";
 import Resizer from "./Resizer";
+import { useLlmActivity, LlmActivityHandle } from "../lib/llmActivity";
 
 type Tool = {
   key: string;
@@ -189,29 +190,35 @@ export default function WritePanel({ project }: { project: Project }) {
   const wordCount = (e?.content || "").replace(/\s/g, "").length;
 
   const cancelStreamRef = useRef<(() => void) | null>(null);
+  const activityRef = useRef<LlmActivityHandle | null>(null);
+  const llm = useLlmActivity();
 
   function aiRun(mode: string, instructionOverride?: string) {
     if (!e) return;
     cancelStreamRef.current?.();
+    activityRef.current?.end();
     setBusy(true);
     setAi("");
     const instruction = instructionOverride ?? (inst || "既存の記事内容を守ってください");
     setInst(instruction);
     const body = { project_id: project.id, episode_id: e.id, instruction, mode, rag_limit: 6 };
     let text = "";
+    const label = mode === "summary" ? "AIが要約を作成中です…" : mode === "continue" ? "AIが続きを執筆中です…" : mode === "proofread" ? "AIが文章を校正中です…" : "AIが文章を生成中です…";
+    const act = llm.begin(label, { cancel: () => cancelStreamRef.current?.() });
+    activityRef.current = act;
     cancelStreamRef.current = streamSSE(
       "/ai/generate/stream",
       (data) => {
         const event = data as { delta?: string; error?: string; done?: boolean };
         if (event.error) { setAi(event.error); return; }
-        if (event.delta) { text += event.delta; setAi(text); }
+        if (event.delta) { text += event.delta; setAi(text); act.update({ detail: `${text.length.toLocaleString()} 文字受信` }); }
       },
-      () => setBusy(false),
+      () => { act.end(); if (activityRef.current === act) activityRef.current = null; setBusy(false); },
       body,
     );
   }
 
-  useEffect(() => () => cancelStreamRef.current?.(), []);
+  useEffect(() => () => { cancelStreamRef.current?.(); activityRef.current?.end(); }, []);
 
   function runTool(tool: Tool, choice?: string) {
     setShowTools(false);

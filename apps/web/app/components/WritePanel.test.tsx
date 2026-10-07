@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { LlmActivityProvider } from "../lib/llmActivity";
 import WritePanel from "./WritePanel";
 import { api, post, put, del, streamSSE, postFile, downloadFile } from "../lib/api";
 import { Project } from "../lib/types";
@@ -254,5 +255,33 @@ describe("WritePanel", () => {
     await waitFor(() =>
       expect(downloadFile).toHaveBeenCalledWith(`/episodes/${episode.id}/docx-export`, `${episode.title}.docx`)
     );
+  });
+});
+
+describe("WritePanel LLM progress dialog", () => {
+  it("shows the progress dialog while the AI stream runs and hides it when the stream ends", async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.includes("/episodes")) return Promise.resolve([episode]);
+      return Promise.resolve([]);
+    });
+    let finish: () => void = () => {};
+    vi.mocked(streamSSE).mockImplementation((_path, onMessage, onDone) => {
+      onMessage({ delta: "あいう" });
+      finish = () => onDone?.();
+      return () => {};
+    });
+    render(<LlmActivityProvider><WritePanel project={project} /></LlmActivityProvider>);
+
+    await waitFor(() => expect(screen.getByText("🛠 AIツール")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("🛠 AIツール"));
+    fireEvent.click(screen.getByText("✎ 文章を改善"));
+
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByText("AIが文章を生成中です…")).toBeInTheDocument();
+    expect(screen.getByText("3 文字受信")).toBeInTheDocument();
+    expect(screen.getByText("キャンセル")).toBeInTheDocument();
+
+    act(() => finish());
+    await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull());
   });
 });

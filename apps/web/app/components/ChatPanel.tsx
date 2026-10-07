@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { marked } from "marked";
 import { api, del, post } from "../lib/api";
+import { useLlmActivity } from "../lib/llmActivity";
 
 type Msg = { id: number; role: "user" | "assistant"; content: string };
 
@@ -9,6 +10,7 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const llm = useLlmActivity();
 
   async function load() {
     setMessages(await api(`/projects/${projectId}/chat`));
@@ -20,10 +22,12 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
     if (!text || busy) return;
     setInput("");
     setBusy(true);
+    const act = llm.begin("AIチャットが回答を作成中です…");
     try {
       const turns = await post(`/projects/${projectId}/chat`, { content: text });
       setMessages((m) => [...m, ...turns]);
     } finally {
+      act.end();
       setBusy(false);
     }
   }
