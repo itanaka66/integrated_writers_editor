@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, del, downloadFile, getAuth, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { ensureNotificationPermission, notify } from "../lib/notify";
+import { useLlmActivity } from "../lib/llmActivity";
 
 type ImportJob = {
   id: number; mode: "writers" | "episodes"; source_filename: string;
@@ -103,6 +104,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
   type TestResult = { ok: boolean; message: string; latency_ms: number };
+  const llm = useLlmActivity();
   const [testResults, setTestResults] = useState<Record<string, TestResult | "testing" | undefined>>({});
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -123,12 +125,13 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   async function testConnection(resultKey: string, target: string, url?: string, model?: string, apiKey?: string) {
     setTestResults((prev) => ({ ...prev, [resultKey]: "testing" }));
+    const act = llm.begin("接続テストを実行中です…");
     try {
       const r: TestResult = await post("/system-settings/test-connection", { target, url, model, api_key: apiKey });
       setTestResults((prev) => ({ ...prev, [resultKey]: r }));
     } catch {
       setTestResults((prev) => ({ ...prev, [resultKey]: { ok: false, message: "テストに失敗しました（通信エラー）。", latency_ms: 0 } }));
-    }
+    } finally { act.end(); }
   }
 
   function TestButton({ target, resultKey, url, model, apiKey }: { target: string; resultKey?: string; url?: string; model?: string; apiKey?: string }) {
@@ -371,12 +374,13 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   async function generateStyleGuide(category: string, detail?: string) {
     setStyleGuideBusy(true);
+    const act = llm.begin("スタイルガイドを生成中です…");
     try {
       const { style_guide }: { style_guide: string } = await post(`/projects/${project.id}/style-guide/generate`, { category, detail: detail || "" });
       setForm((f) => ({ ...f, style_guide }));
       setShowStyleGuidePicker(false);
       setPendingAcademic(false);
-    } finally { setStyleGuideBusy(false); }
+    } finally { act.end(); setStyleGuideBusy(false); }
   }
 
   return (

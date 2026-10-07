@@ -13,6 +13,7 @@ import ChatPanel from "./components/ChatPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import Resizer from "./components/Resizer";
 import { useResizableWidth } from "./lib/useResizableWidth";
+import { LlmActivityProvider } from "./lib/llmActivity";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -44,7 +45,7 @@ export default function Studio() {
   if (resetToken) return <PasswordResetScreen token={resetToken} />;
   if (authed === null) return <div className="center">確認中...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
-  return <Workspace />;
+  return <LlmActivityProvider><Workspace /></LlmActivityProvider>;
 }
 
 function PasswordResetScreen({ token }: { token: string }) {

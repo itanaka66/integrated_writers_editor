@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, post, postForm, del } from "../lib/api";
 import { Memo, Template } from "../lib/types";
+import { useLlmActivity } from "../lib/llmActivity";
 
 type Tab = "research" | "summarize" | "memos" | "templates";
 
@@ -46,15 +47,17 @@ function ResearchTab({ projectId }: { projectId: number }) {
   const [topic, setTopic] = useState("");
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
+  const llm = useLlmActivity();
 
   async function run() {
     if (!topic.trim()) return;
     setBusy(true);
+    const act = llm.begin("AIがリサーチ中です…");
     try {
       const instruction = `次のテーマについて情報収集・リサーチしてください。関連する論点、押さえるべき観点、参考にすべき切り口を整理してください。\n\nテーマ: ${topic}`;
       const x = await post("/ai/generate", { project_id: projectId, instruction, mode: "custom", rag_limit: 6 });
       setResult(x.text || x.detail || "");
-    } finally { setBusy(false); }
+    } finally { act.end(); setBusy(false); }
   }
 
   return (
@@ -72,14 +75,16 @@ function SummarizeTab({ projectId }: { projectId: number }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
+  const llm = useLlmActivity();
 
   async function run() {
     if (!file && !text.trim()) return;
     setBusy(true);
+    const act = llm.begin("資料を要約中です…");
     try {
       const x = await postForm("/tools/summarize-material", file ? { file } : { text });
       setResult(x.summary || x.detail || "");
-    } finally { setBusy(false); }
+    } finally { act.end(); setBusy(false); }
   }
 
   return (
@@ -99,6 +104,7 @@ function MemosTab({ projectId }: { projectId: number }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [filter, setFilter] = useState<string>("all");
+  const llm = useLlmActivity();
 
   async function load() {
     setMemos(await api(`/projects/${projectId}/memos`));
@@ -118,7 +124,11 @@ function MemosTab({ projectId }: { projectId: number }) {
 
   async function createArticleFromMemo(memo: Memo) {
     const instruction = `次の箇条書き・メモをもとに、まとまった記事の下書きを作成してください。見出しを付け、読みやすい文章に展開してください。\n\nメモ:\n${memo.content}`;
-    const x = await post("/ai/generate", { project_id: projectId, instruction, mode: "custom", rag_limit: 6 });
+    const act = llm.begin("メモから記事の下書きをAIが作成中です…");
+    let x;
+    try {
+      x = await post("/ai/generate", { project_id: projectId, instruction, mode: "custom", rag_limit: 6 });
+    } finally { act.end(); }
     const draft = x.text || x.detail || "";
     const eps = await api(`/projects/${projectId}/episodes`);
     const number = (eps[eps.length - 1]?.number || 0) + 1;
