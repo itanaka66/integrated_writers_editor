@@ -152,3 +152,11 @@ class SelfPasswordChangeRequest(BaseModel): current_password:str; new_password:s
 class PasswordResetRequestIn(BaseModel): email:str
 class PasswordResetGenericOut(BaseModel): message:str
 class PasswordResetConfirmIn(BaseModel): token:str; new_password:str
+
+
+class LlmJobOut(BaseModel):
+    id:int; label:str; username:str|None=None; project_id:int|None=None
+    status:str; position:int|None=None; elapsed_seconds:float; chars:int
+
+class LlmQueueOut(BaseModel):
+    running:list[LlmJobOut]; queued:list[LlmJobOut]; recent:list[LlmJobOut]

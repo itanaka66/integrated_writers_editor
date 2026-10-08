@@ -4,7 +4,7 @@ from app import main as main_module
 
 
 def test_style_guide_generate(client, project, monkeypatch):
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert project["name"] in prompt
         return "・である調で統一する\n・句読点は全角を使う", "test-model"
 
@@ -16,7 +16,7 @@ def test_style_guide_generate(client, project, monkeypatch):
 
 
 def test_style_guide_generate_with_category_adds_guidance(client, project, monkeypatch):
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert "翻訳文書・ローカライズ" in prompt
         assert "用語集的なルール" in prompt
         return "・訳語を統一する", "test-model"
@@ -29,7 +29,7 @@ def test_style_guide_generate_with_category_adds_guidance(client, project, monke
 
 
 def test_style_guide_generate_academic_category_uses_citation_detail(client, project, monkeypatch):
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert "MLA" in prompt
         assert "APA" not in prompt
         return "・MLA形式で統一する", "test-model"
@@ -45,7 +45,7 @@ def test_style_guide_generate_academic_category_uses_citation_detail(client, pro
 
 
 def test_style_guide_generate_academic_category_defaults_to_apa(client, project, monkeypatch):
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert "APA形式" in prompt
         return "ok", "test-model"
 
@@ -56,7 +56,7 @@ def test_style_guide_generate_academic_category_defaults_to_apa(client, project,
 
 
 def test_style_guide_generate_unknown_category_is_ignored(client, project, monkeypatch):
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         return "ok", "test-model"
 
     monkeypatch.setattr(main_module, "generate", fake_generate)
@@ -78,7 +78,7 @@ def test_proofread_returns_diffs_matching_content(client, project, monkeypatch):
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "今日は良い天気です。"})
     episode = r.json()
 
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert "である調で統一する" in prompt
         assert "今日は良い天気です。" in prompt
         return (
@@ -105,7 +105,7 @@ def test_proofread_checks_unsaved_content_when_provided(client, project, monkeyp
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "保存済みの本文です。"})
     episode = r.json()
 
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         assert "保存済み" not in prompt
         assert "未保存の編集中の本文です。" in prompt
         return '[{"original": "未保存", "suggested": "編集中", "reason": "r"}]', "test-model"
@@ -122,7 +122,7 @@ def test_proofread_empty_diffs_when_no_changes_needed(client, project, monkeypat
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文である。"})
     episode = r.json()
 
-    async def fake_generate(prompt, project_id=None):
+    async def fake_generate(prompt, project_id=None, *_a, **_kw):
         return "[]", "test-model"
 
     monkeypatch.setattr(main_module, "generate", fake_generate)
@@ -142,7 +142,7 @@ def test_proofread_stream_sends_deltas_then_diffs(client, project, monkeypatch):
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "今日は良い天気です。"})
     episode = r.json()
 
-    async def fake_generate_stream(prompt, project_id=None):
+    async def fake_generate_stream(prompt, project_id=None, *_a, **_kw):
         assert "である調で統一する" in prompt
         yield {"delta": '[{"original": "です。", '}
         yield {"delta": '"suggested": "である。", "reason": "である調に統一"}]'}
@@ -167,7 +167,7 @@ def test_proofread_stream_reports_provider_errors_as_an_event(client, project):
     r = client.post(f"/api/v1/projects/{project['id']}/episodes", json={"number": 1, "title": "t", "content": "本文"})
     episode = r.json()
 
-    async def fake_generate_stream(prompt, project_id=None):
+    async def fake_generate_stream(prompt, project_id=None, *_a, **_kw):
         raise ProviderError("APIキーが未設定です")
         yield  # pragma: no cover - unreachable, keeps this an async generator
 

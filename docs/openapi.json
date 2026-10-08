@@ -426,6 +426,24 @@
         }
       }
     },
+    "/api/v1/llm/queue": {
+      "get": {
+        "summary": "Llm Queue State",
+        "operationId": "llm_queue_state_api_v1_llm_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmQueueOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/me/password": {
       "post": {
         "summary": "Users Change Own Password",
@@ -2815,7 +2833,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -2829,7 +2847,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -2843,7 +2861,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -2859,7 +2877,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "binary"
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
@@ -3304,6 +3322,104 @@
           "updated_at"
         ],
         "title": "ImportJobOut"
+      },
+      "LlmJobOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "title": "Elapsed Seconds"
+          },
+          "chars": {
+            "type": "integer",
+            "title": "Chars"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "status",
+          "elapsed_seconds",
+          "chars"
+        ],
+        "title": "LlmJobOut"
+      },
+      "LlmQueueOut": {
+        "properties": {
+          "running": {
+            "items": {
+              "$ref": "#/components/schemas/LlmJobOut"
+            },
+            "type": "array",
+            "title": "Running"
+          },
+          "queued": {
+            "items": {
+              "$ref": "#/components/schemas/LlmJobOut"
+            },
+            "type": "array",
+            "title": "Queued"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/LlmJobOut"
+            },
+            "type": "array",
+            "title": "Recent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "running",
+          "queued",
+          "recent"
+        ],
+        "title": "LlmQueueOut"
       },
       "MaterialSummarizeOut": {
         "properties": {
@@ -4511,6 +4627,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

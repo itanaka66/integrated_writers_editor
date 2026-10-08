@@ -67,6 +67,8 @@ services:
       BACKUP_DIR: /backups
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-7}
+      LLM_MAX_CONCURRENCY_OLLAMA: ${LLM_MAX_CONCURRENCY_OLLAMA:-1}
+      LLM_MAX_CONCURRENCY_CLOUD: ${LLM_MAX_CONCURRENCY_CLOUD:-4}
     volumes:
       - writers_storage:/writers_storage
       - backups:/backups

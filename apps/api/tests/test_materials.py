@@ -2,7 +2,7 @@ from app import main as main_module
 
 
 def test_summarize_material_with_text(client, monkeypatch):
-    async def fake_generate(prompt):
+    async def fake_generate(prompt, *_a, **_kw):
         assert "資料本文" in prompt
         return "要約結果", "test-model"
 
@@ -21,7 +21,7 @@ def test_summarize_material_requires_input(client):
 
 
 def test_summarize_material_with_pdf(client, monkeypatch):
-    async def fake_generate(prompt):
+    async def fake_generate(prompt, *_a, **_kw):
         assert "PDF本文" in prompt
         return "PDF要約", "test-model"
 
