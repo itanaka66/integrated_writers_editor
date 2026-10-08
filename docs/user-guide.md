@@ -79,6 +79,10 @@ Checking "すべての作品を検索対象にする" (search all projects) swit
 
 The "検索・全置換" tab on the same screen is a separate, plain-text (not semantic) find/replace scoped to the current project's episodes **and memos** (`GET`/`POST /api/v1/projects/{id}/text-search` and `/text-replace`). Enter a search string and optional replacement, toggle case sensitivity, and search — each matching episode or memo is listed with its hit count and surrounding snippets, and is pre-selected for replacement (uncheck any you want to skip). Replacing snapshots each affected episode's prior content to revision history first (see Write screen's revision history), so a replace-all can always be undone episode by episode afterward.
 
+## AI processing queue (AI処理キュー)
+
+All LLM calls (AI tools, chat, proofreading, style-guide generation, material summaries) go through a server-side queue (`GET /api/v1/llm/queue`). At most `LLM_MAX_CONCURRENCY_OLLAMA` (default 1) Ollama calls and `LLM_MAX_CONCURRENCY_CLOUD` (default 4, for Anthropic/OpenAI/Google) calls run at once; the rest wait first-come-first-served. While an AI call is running, the progress dialog lists every job the server knows about (all users): running (animated bar), waiting ("待機中・N番目", dashed bar) and just-finished ones, with your own jobs highlighted. There is no percentage — LLM calls don't report real progress. The sidebar's "📋 AI処理キュー" button opens the same list at any time (it polls once a second only while open). The queue is in-memory per API process (the default single-worker setup shows everything). Set the two limits as environment variables (see `.env.example`).
+
 ## AI Chat (AIチャット)
 
 A free-form chat with the AI about the current project. Conversation history is **persisted per project** (`GET`/`POST`/`DELETE /api/v1/projects/{id}/chat`) — it's still there when you come back to this screen or reload the page. "履歴を削除" permanently deletes it for that project. Replies are rendered as Markdown (headings, bold, tables, rules) — not shown as raw `##`/`**`/`|` syntax.

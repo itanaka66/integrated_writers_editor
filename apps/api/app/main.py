@@ -9,6 +9,7 @@ from .db import get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
+from .llm_queue import queue as llm_queue
 from .providers import generate, generate_stream, ProviderError
 from .rag import index,search,search_all_projects
 from .context import build
@@ -166,8 +167,13 @@ STYLE_GUIDE_CATEGORY_GUIDANCE={
  'academic':'この文書は学術論文・研究レポートです。引用の形式や文献リストの書き方は{detail}に統一し、客観的で厳密な文体、専門用語の正確な使用を特に重視してください。',
  'pr':'この文書は広報・ニュース・プレスリリースです。企業イメージや媒体としての信頼性を保つため、用字用語のルール（記者ハンドブック的な統一基準）と、簡潔かつ正確に事実を伝える文体を特に重視してください。',
 }
+def _uname(request):return getattr(request.state,'username',None)
+# SSE comment sent while a job waits in the LLM queue: keeps bytes flowing
+# (no proxy idle timeout) and is ignored by streamSSE, which only reads `data:` lines.
+_QUEUED_COMMENT=': queued\n\n'
+def _ai_label(mode):return {'continue':'続きを書く','summary':'要約','proofread':'文章校正'}.get(mode,'AI生成')
 @app.post('/api/v1/projects/{pid}/style-guide/generate',response_model=StyleGuideOut)
-async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGenerateRequest(),db:Session=Depends(get_db)):
+async def style_guide_generate(request:Request,pid:int,x:StyleGuideGenerateRequest=StyleGuideGenerateRequest(),db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
  sample='\n\n'.join(e.content for e in eps[:5] if e.content).strip()[:6000]
@@ -178,7 +184,7 @@ async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGen
 
 本文サンプル:
 {sample or "（まだ本文がありません。一般的で読みやすい日本語のスタイルガイドを提案してください。）"}'''
- try:t,m=await generate(prompt,pid)
+ try:t,m=await generate(prompt,pid,'スタイルガイド生成',_uname(request))
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return StyleGuideOut(style_guide=t.strip())
@@ -206,14 +212,14 @@ def _proofread_setup(eid,x,db):
  content=x.content if x.content is not None else e.content
  return e,p,content
 @app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
-async def episode_proofread(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+async def episode_proofread(request:Request,eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
  e,p,content=_proofread_setup(eid,x,db)
- try:t,m=await generate(_proofread_prompt(p.style_guide,content),e.project_id)
+ try:t,m=await generate(_proofread_prompt(p.style_guide,content),e.project_id,'文章校正',_uname(request))
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return ProofreadResult(diffs=[ProofreadDiff(**d) for d in _parse_proofread_diffs(t,content)])
 @app.post('/api/v1/episodes/{eid}/proofread/stream')
-async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+async def episode_proofread_stream(request:Request,eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
  # Proofreading a full episode can take long enough for a slow local LLM
  # that a single buffered request sits idle past an intermediate proxy's
  # timeout (observed: Cloudflare Tunnel returning a 504 well before the
@@ -224,10 +230,14 @@ async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest()
  # the client never has to parse JSON out of accumulated deltas itself.
  e,p,content=_proofread_setup(eid,x,db)
  prompt=_proofread_prompt(p.style_guide,content)
+ uname=_uname(request)
  async def gen():
   text=''
   try:
-   async for event in generate_stream(prompt,e.project_id):
+   async for event in generate_stream(prompt,e.project_id,'文章校正',uname):
+    if event.get('queued'):
+     yield _QUEUED_COMMENT
+     continue
     if event.get('delta'):
      text+=event['delta']
      yield f'data: {json.dumps({"delta":event["delta"]},ensure_ascii=False)}\n\n'
@@ -275,6 +285,9 @@ def _user_out(u):return UserOut.model_validate(u)
 @app.get('/api/v1/auth/me',response_model=UserOut)
 def auth_me(user:User=Depends(get_current_user)):
  return _user_out(user)
+@app.get('/api/v1/llm/queue',response_model=LlmQueueOut)
+def llm_queue_state():
+ return llm_queue.snapshot()
 @app.post('/api/v1/users/me/password',response_model=UserOut)
 def users_change_own_password(x:SelfPasswordChangeRequest,db:Session=Depends(get_db),user:User=Depends(get_current_user)):
  if authenticate_user(db,User,user.username,x.current_password) is None:
@@ -601,23 +614,27 @@ async def rag_search_all(x:RagSearchAll,db:Session=Depends(get_db)):
   projects={p.id:p.name for p in db.scalars(select(Project)).all()}
   return {'source':'postgresql','results':[{'episode_id':e.id,'project_id':e.project_id,'project_name':projects.get(e.project_id,''),'title':e.title,'text':e.content} for e in rows]}
 @app.post('/api/v1/ai/generate')
-async def ai(x:AIGenerate,db:Session=Depends(get_db)):
+async def ai(request:Request,x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
  task={'continue':'本文の続きを書く','summary':'本文を要約する','proofread':'表現・誤字脱字を校正する'}.get(x.mode,'依頼を実行する')
  prompt=f'''あなたは記事編集AIです。既存の記事内容を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
- try:t,m=await generate(prompt,x.project_id)
+ try:t,m=await generate(prompt,x.project_id,_ai_label(x.mode),_uname(request))
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return {'text':t,'model':m,'context':{'rag':len(c['rag'])}}
 
 @app.post('/api/v1/ai/generate/stream')
-async def ai_stream(x:AIGenerate,db:Session=Depends(get_db)):
+async def ai_stream(request:Request,x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
  task={'continue':'本文の続きを書く','summary':'本文を要約する','proofread':'表現・誤字脱字を校正する'}.get(x.mode,'依頼を実行する')
  prompt=f'''あなたは記事編集AIです。既存の記事内容を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
+ uname=_uname(request)
  async def gen():
   try:
-   async for event in generate_stream(prompt,x.project_id):
+   async for event in generate_stream(prompt,x.project_id,_ai_label(x.mode),uname):
+    if event.get('queued'):
+     yield _QUEUED_COMMENT
+     continue
     yield f'data: {json.dumps(event,ensure_ascii=False)}\n\n'
   except ProviderError as ex:
    yield f'data: {json.dumps({"error":str(ex)},ensure_ascii=False)}\n\n'
@@ -630,13 +647,13 @@ def chat_history(pid:int,limit:int=200,db:Session=Depends(get_db)):
  return list(db.scalars(select(ChatMessage).where(ChatMessage.project_id==pid).order_by(ChatMessage.id).limit(clamp_limit(limit))).all())
 
 @app.post('/api/v1/projects/{pid}/chat',response_model=list[ChatMessageOut])
-async def chat_send(pid:int,x:ChatMessageCreate,db:Session=Depends(get_db)):
+async def chat_send(request:Request,pid:int,x:ChatMessageCreate,db:Session=Depends(get_db)):
  crud_get_or_404(db,Project,pid,'Project')
  user_msg=ChatMessage(project_id=pid,role='user',content=x.content);db.add(user_msg);db.commit();db.refresh(user_msg)
  c=await build(db,pid,None,8)
  prompt=f'''あなたは記事作成のAIチャットアシスタントです。既存の記事内容を最優先してください。\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n質問:{x.content}\n日本語で出力してください。'''
  try:
-  t,_=await generate(prompt,pid)
+  t,_=await generate(prompt,pid,'AIチャット',_uname(request))
  except Exception as ex:
   t=f'エラーが発生しました。AIサービスの状態を確認してください。（{ex}）'
  assistant_msg=ChatMessage(project_id=pid,role='assistant',content=t);db.add(assistant_msg);db.commit();db.refresh(assistant_msg)
@@ -670,7 +687,7 @@ def source_put(sid:int,x:SourceUpdate,db:Session=Depends(get_db)):return crud_up
 def source_delete(sid:int,db:Session=Depends(get_db)):crud_delete(db,Source,sid,'Source')
 
 @app.post('/api/v1/tools/summarize-material',response_model=MaterialSummarizeOut)
-async def summarize_material(file:UploadFile|None=File(None),text:str|None=Form(None)):
+async def summarize_material(request:Request,file:UploadFile|None=File(None),text:str|None=Form(None)):
  if file is not None:
   data=await file.read()
   content=materials.extract_text_from_pdf(data)
@@ -678,7 +695,7 @@ async def summarize_material(file:UploadFile|None=File(None),text:str|None=Form(
   content=text or ''
  if not content.strip():raise HTTPException(400,'file または text のいずれかを指定してください。')
  prompt=materials.build_summarize_prompt(content)
- try:t,m=await generate(prompt)
+ try:t,m=await generate(prompt,None,'要約',_uname(request))
  except ProviderError as ex:raise HTTPException(400,str(ex))
  except Exception as ex:raise HTTPException(503,f'AI provider error: {ex}')
  return MaterialSummarizeOut(summary=t,model=m)

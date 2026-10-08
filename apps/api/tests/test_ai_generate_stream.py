@@ -9,7 +9,7 @@ def test_ai_generate_stream_sends_deltas_then_done(client, project):
         json={"number": 1, "title": "第一話", "summary": "", "content": "本文"},
     ).json()
 
-    async def fake_generate_stream(prompt, project_id=None):
+    async def fake_generate_stream(prompt, project_id=None, *_a, **_kw):
         assert project_id == project["id"]
         yield {"delta": "こん"}
         yield {"delta": "にちは"}
@@ -36,7 +36,7 @@ def test_ai_generate_stream_sends_deltas_then_done(client, project):
 def test_ai_generate_stream_reports_provider_errors_as_an_event(client, project):
     from app.providers import ProviderError
 
-    async def fake_generate_stream(prompt, project_id=None):
+    async def fake_generate_stream(prompt, project_id=None, *_a, **_kw):
         raise ProviderError("APIキーが未設定です")
         yield  # pragma: no cover - unreachable, keeps this an async generator
 

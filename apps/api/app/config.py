@@ -11,6 +11,8 @@ class Settings(BaseSettings):
  anthropic_api_key:str=''; anthropic_model:str='claude-sonnet-4-5'
  openai_api_key:str=''; openai_model:str='gpt-4o-mini'
  google_api_key:str=''; google_model:str='gemini-2.0-flash'
+ # Max concurrent LLM calls; extra requests wait in app/llm_queue.py.
+ llm_max_concurrency_ollama:int=1; llm_max_concurrency_cloud:int=4
  # Local-disk mirror of episode text, optionally auto-committed/pushed to a
  # git remote on a timer. git_remote_url takes a token embedded the way git
  # expects (https://<token>@host/owner/repo.git) or a plain URL if the

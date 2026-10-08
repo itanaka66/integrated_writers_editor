@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { LlmActivityProvider, useLlmActivity, LlmActivityHandle } from "./llmActivity";
 
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
+  api: vi.fn(() => Promise.resolve(undefined)),
+}));
+
 let handle: LlmActivityHandle | null = null;
 function Starter({ cancel }: { cancel?: () => void }) {
   const llm = useLlmActivity();

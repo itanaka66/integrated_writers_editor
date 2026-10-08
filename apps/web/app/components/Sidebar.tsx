@@ -2,6 +2,7 @@
 import { ReactNode } from "react";
 import { Project } from "../lib/types";
 import { clearAuth } from "../lib/api";
+import { LlmQueueButton } from "../lib/llmActivity";
 
 export type Section = "home" | "write" | "materials" | "search" | "chat" | "settings";
 
@@ -27,6 +28,7 @@ export default function Sidebar({ project, section, onSection, onDashboard, resi
           <button key={n.key} className={section === n.key ? "nav active" : "nav"} onClick={() => onSection(n.key)}>{n.label}</button>
         ))}
       </div>
+      <LlmQueueButton />
       <button className="appSidebarLogout" onClick={() => { clearAuth(); window.location.reload(); }}>⏻ ログアウト</button>
       {resizer}
     </aside>

@@ -19,10 +19,12 @@ the retry-free-but-timeout-bounded style already used for embeddings; the
 richer retry-on-transient-failure behavior stays specific to ollama.py since
 that's the only backend a self-hosted deployment depends on for uptime.
 """
+import asyncio
 import json
 
 import httpx
 
+from .llm_queue import queue as llm_queue, KEEPALIVE_SECONDS
 from .ollama import generate_with_usage as _ollama_generate_with_usage, stream_generate as _ollama_stream_generate
 from .runtime_config import get_effective_config
 from .usage import log_usage
@@ -86,18 +88,20 @@ async def _google_generate(prompt, cfg):
     return text, cfg.google_model, {'input_tokens': usage.get('promptTokenCount'), 'output_tokens': usage.get('candidatesTokenCount')}
 
 
-async def generate(prompt, project_id: int | None = None):
+async def generate(prompt, project_id: int | None = None, label: str = 'AI処理', username: str | None = None):
     cfg = get_effective_config()
     provider = cfg.ai_provider or 'ollama'
-    if provider == 'anthropic':
-        text, model, usage = await _anthropic_generate(prompt, cfg)
-    elif provider == 'openai':
-        text, model, usage = await _openai_generate(prompt, cfg)
-    elif provider == 'google':
-        text, model, usage = await _google_generate(prompt, cfg)
-    else:
+    if provider not in ('anthropic', 'openai', 'google'):
         provider = 'ollama'
-        text, model, usage = await _ollama_generate_with_usage(prompt)
+    async with llm_queue.slot(label, provider, project_id, username):
+        if provider == 'anthropic':
+            text, model, usage = await _anthropic_generate(prompt, cfg)
+        elif provider == 'openai':
+            text, model, usage = await _openai_generate(prompt, cfg)
+        elif provider == 'google':
+            text, model, usage = await _google_generate(prompt, cfg)
+        else:
+            text, model, usage = await _ollama_generate_with_usage(prompt)
     log_usage(project_id, provider, model, usage.get('input_tokens'), usage.get('output_tokens'))
     return text, model
 
@@ -208,18 +212,33 @@ async def _stream_ollama(prompt, cfg, project_id):
             yield event
 
 
-async def generate_stream(prompt, project_id: int | None = None):
+async def generate_stream(prompt, project_id: int | None = None, label: str = 'AI処理', username: str | None = None):
+    # While waiting in the queue this yields {'queued': True, 'position': n}
+    # immediately and every KEEPALIVE_SECONDS so the HTTP response keeps
+    # sending bytes (callers turn it into an SSE comment). The slot is
+    # released in `finally` whatever happens: error, early aclose(), or task
+    # cancellation.
     cfg = get_effective_config()
     provider = cfg.ai_provider or 'ollama'
-    if provider == 'anthropic':
-        async for event in _stream_anthropic(prompt, cfg, project_id):
+    if provider not in ('anthropic', 'openai', 'google'):
+        provider = 'ollama'
+    job = llm_queue.submit(label, provider, project_id, username)
+    status = 'done'
+    try:
+        if not job.started.done():
+            yield {'queued': True, 'position': llm_queue.position(job)}
+            while not await job.wait_started(KEEPALIVE_SECONDS):
+                yield {'queued': True, 'position': llm_queue.position(job)}
+        impl = {'anthropic': _stream_anthropic, 'openai': _stream_openai, 'google': _stream_google}.get(provider, _stream_ollama)
+        async for event in impl(prompt, cfg, project_id):
+            if event.get('delta'):
+                job.add_chars(len(event['delta']))
             yield event
-    elif provider == 'openai':
-        async for event in _stream_openai(prompt, cfg, project_id):
-            yield event
-    elif provider == 'google':
-        async for event in _stream_google(prompt, cfg, project_id):
-            yield event
-    else:
-        async for event in _stream_ollama(prompt, cfg, project_id):
-            yield event
+    except (asyncio.CancelledError, GeneratorExit):
+        status = 'cancelled'
+        raise
+    except BaseException:
+        status = 'error'
+        raise
+    finally:
+        llm_queue.release(job, status)
