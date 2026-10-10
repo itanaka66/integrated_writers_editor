@@ -13,7 +13,16 @@ A screen-by-screen reference. For setup, see the [Installation Manual](installat
 
 One shared account, configured via the `ADMIN_USERNAME` (default `admin`) / `ADMIN_PASSWORD` environment variables — not per-user accounts. There is no session or token: the browser resends this username/password as HTTP Basic Auth on every request, stored in this browser's `localStorage`. Logging out isn't a feature as such; clearing the browser's site data (or getting a 401, e.g. from a wrong password) drops you back to the login screen.
 
-The "Googleでログイン" / "GitHubでログイン" buttons are visible but disabled — there's no OAuth integration. Don't wait for them to work.
+The "Sign in with Google" / "Sign in with GitHub" buttons are visible but disabled — there's no OAuth integration. Don't wait for them to work.
+
+## Display language
+
+After you log in, the whole workspace can be shown in one of 8 languages: English, 日本語 (Japanese), 简体中文 (Simplified Chinese), 한국어 (Korean), Español, Français, Deutsch and Português.
+
+- The language is chosen only on the **login screen**, with the language selector. The login screen itself, the password-reset screens and their error messages are always in English.
+- Your choice is stored in this browser and is pre-selected the next time you visit. On a first visit it defaults to your browser's language (English if that language is not supported).
+- There is no language switcher inside the workspace. To change the language, log out, pick another language on the login screen and log in again.
+- Only the interface is translated. The language the AI writes in is unchanged (the built-in AI prompts and default style guide remain Japanese), and some server messages may still appear in Japanese.
 
 ## Dashboard
 

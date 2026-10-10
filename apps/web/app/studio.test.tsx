@@ -68,7 +68,7 @@ describe("Studio password-reset screen", () => {
     vi.mocked(getAuth).mockReturnValue(null);
     vi.mocked(api).mockRejectedValue(new Error("unauthorized"));
     render(<Studio />);
-    await waitFor(() => expect(screen.getByText("パスワード再設定")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Reset your password")).toBeInTheDocument());
     expect(screen.queryByText("login-screen")).not.toBeInTheDocument();
   });
 
@@ -78,14 +78,14 @@ describe("Studio password-reset screen", () => {
     vi.mocked(api).mockRejectedValue(new Error("unauthorized"));
     vi.mocked(post).mockResolvedValue({ message: "ok" });
     render(<Studio />);
-    await waitFor(() => expect(screen.getByText("パスワード再設定")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Reset your password")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByPlaceholderText("新しいパスワード"), { target: { value: "new-pw-123" } });
-    fireEvent.change(screen.getByPlaceholderText("新しいパスワード（確認）"), { target: { value: "new-pw-123" } });
-    fireEvent.click(screen.getByRole("button", { name: "パスワードを再設定" }));
+    fireEvent.change(screen.getByPlaceholderText("New password"), { target: { value: "new-pw-123" } });
+    fireEvent.change(screen.getByPlaceholderText("Confirm new password"), { target: { value: "new-pw-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith("/auth/password-reset/confirm", { token: "abc123", new_password: "new-pw-123" }));
-    await waitFor(() => expect(screen.getByText(/パスワードを再設定しました/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Your password has been reset/)).toBeInTheDocument());
   });
 
   it("shows a mismatch error without calling the API when confirmation doesn't match", async () => {
@@ -93,13 +93,13 @@ describe("Studio password-reset screen", () => {
     vi.mocked(getAuth).mockReturnValue(null);
     vi.mocked(api).mockRejectedValue(new Error("unauthorized"));
     render(<Studio />);
-    await waitFor(() => expect(screen.getByText("パスワード再設定")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Reset your password")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByPlaceholderText("新しいパスワード"), { target: { value: "new-pw-123" } });
-    fireEvent.change(screen.getByPlaceholderText("新しいパスワード（確認）"), { target: { value: "mismatch" } });
-    fireEvent.click(screen.getByRole("button", { name: "パスワードを再設定" }));
+    fireEvent.change(screen.getByPlaceholderText("New password"), { target: { value: "new-pw-123" } });
+    fireEvent.change(screen.getByPlaceholderText("Confirm new password"), { target: { value: "mismatch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
 
-    expect(screen.getByText("新しいパスワード（確認）が一致しません。")).toBeInTheDocument();
+    expect(screen.getByText("The new passwords do not match.")).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
   });
 });

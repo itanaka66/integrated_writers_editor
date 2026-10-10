@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, postFile } from "../lib/api";
 import { Project } from "../lib/types";
 import { ensureNotificationPermission, notify } from "../lib/notify";
+import { useT } from "../lib/i18n";
 
 type ImportJob = {
   id: number;
@@ -19,6 +20,7 @@ type ImportJob = {
 };
 
 export default function ImportPanel({ onImported, onCancel }: { onImported: (p: Project) => void; onCancel: () => void }) {
+  const t = useT();
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<ImportJob | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,8 +42,8 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
         if (latest.status === "completed" || latest.status === "error") {
           if (timer.current) clearInterval(timer.current);
           notify(
-            latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
-            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}件・更新${latest.updated_episodes}件）` : `: ${latest.last_message}`}`,
+            latest.status === "completed" ? t("import.notifyDone") : t("import.notifyError"),
+            `${latest.source_filename}${latest.status === "completed" ? t("import.summaryDone", { created: latest.created_episodes, updated: latest.updated_episodes }) : `: ${latest.last_message}`}`,
           );
         }
       }, 2000);
@@ -57,12 +59,12 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
   return (
     <div className="modalOverlay" onClick={job?.status === "completed" ? undefined : onCancel}>
       <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-        <h1>ファイルからインポート</h1>
+        <h1>{t("dashboard.import")}</h1>
         {!job && (
           <>
-            <p>区切り付きのテキストファイル（メタ情報＋記事区切り付きの本文、または記事のみのファイル）から、新しいプロジェクトを作成します。</p>
+            <p>{t("import.intro")}</p>
             <label>
-              ファイル *
+              {t("import.file")}
               <input
                 ref={fileInput}
                 type="file"
@@ -71,11 +73,11 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
               />
             </label>
             <p className="searchSource">
-              取り込み後、各記事のRAG索引付けを自動実行します（記事数が多いと数分かかることがあります）。
+              {t("import.ragNote")}
             </p>
             <div className="modalActions">
-              <button onClick={onCancel}>キャンセル</button>
-              <button onClick={start} disabled={busy || !file}>{busy ? "開始中..." : "インポート開始"}</button>
+              <button onClick={onCancel}>{t("common.cancel")}</button>
+              <button onClick={start} disabled={busy || !file}>{busy ? t("import.starting") : t("import.start")}</button>
             </div>
           </>
         )}
@@ -84,15 +86,15 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
             <p><b>{job.source_filename}</b></p>
             <div className="progress"><i style={{ width: `${job.progress_percent}%` }} /></div>
             <p className="searchSource">
-              {job.status === "queued" && "キューに追加しました…"}
-              {job.status === "running" && `${job.processed_episodes}/${job.total_episodes}件 処理中… ${job.last_message}`}
+              {job.status === "queued" && t("import.queued")}
+              {job.status === "running" && t("import.running", { processed: job.processed_episodes, total: job.total_episodes, message: job.last_message })}
               {job.status === "completed" && job.last_message}
-              {job.status === "error" && `エラー: ${job.last_message}`}
+              {job.status === "error" && t("import.errorPrefix", { message: job.last_message })}
             </p>
             <div className="modalActions">
-              {job.status !== "completed" && job.status !== "error" && <button onClick={onCancel}>閉じる（バックグラウンドで続行）</button>}
-              {job.status === "error" && <button onClick={onCancel}>閉じる</button>}
-              {job.status === "completed" && <button onClick={finish}>プロジェクトを開く</button>}
+              {job.status !== "completed" && job.status !== "error" && <button onClick={onCancel}>{t("import.closeBg")}</button>}
+              {job.status === "error" && <button onClick={onCancel}>{t("common.close")}</button>}
+              {job.status === "completed" && <button onClick={finish}>{t("import.openProject")}</button>}
             </div>
           </>
         )}

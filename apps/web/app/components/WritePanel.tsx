@@ -9,59 +9,73 @@ import DiffView from "./DiffView";
 import ProofreadPanel from "./ProofreadPanel";
 import Resizer from "./Resizer";
 import { useLlmActivity, LlmActivityHandle } from "../lib/llmActivity";
+import { MessageKey, useLocale, useT } from "../lib/i18n";
 
 type Tool = {
   key: string;
-  label: string;
+  labelKey: MessageKey;
   mode?: string; // reuse a built-in /ai/generate mode (continue / summary) as-is
-  options?: string[]; // when set, the user picks one before the prompt is sent
+  // When set, the user picks one before the prompt is sent. `value` is what is
+  // interpolated into the (Japanese) LLM prompt and must stay as-is; only
+  // `labelKey` (the displayed name) is translated.
+  options?: { value: string; labelKey: MessageKey }[];
   buildPrompt?: (choice?: string) => string;
 };
 
-const TOOL_GROUPS: { title: string; tools: Tool[] }[] = [
+// NOTE: the strings returned by buildPrompt are LLM prompts and intentionally
+// stay Japanese (the AI's working language is out of scope for UI i18n).
+const TOOL_GROUPS: { titleKey: MessageKey; tools: Tool[] }[] = [
   {
-    title: "企画・構成",
+    titleKey: "write.group.plan",
     tools: [
-      { key: "idea", label: "💡 アイデア生成", buildPrompt: () => "現在の記事のテーマについて、面白い切り口のアイデアを5つ提案してください。" },
+      { key: "idea", labelKey: "write.tool.idea", buildPrompt: () => "現在の記事のテーマについて、面白い切り口のアイデアを5つ提案してください。" },
       {
         key: "structure",
-        label: "🧱 記事構成作成",
-        options: ["SEO記事", "ニュース記事", "解説記事"],
+        labelKey: "write.tool.structure",
+        options: [
+          { value: "SEO記事", labelKey: "write.opt.seo" },
+          { value: "ニュース記事", labelKey: "write.opt.news" },
+          { value: "解説記事", labelKey: "write.opt.explainer" },
+        ],
         buildPrompt: (choice) => `この記事を${choice}として構成し直す場合の見出し構成案を作成してください。各見出しで書くべき内容も簡潔に添えてください。`,
       },
-      { key: "seo", label: "🔑 SEOキーワード提案", buildPrompt: () => "この記事のテーマに関連するSEOキーワードを提案し、それぞれの検索意図を整理してください。" },
-      { key: "target", label: "🎯 読者ターゲット分析", buildPrompt: () => "この記事は誰に向けて書かれているか、読者ターゲットを分析してください。文体・専門度がそのターゲットに合っているかも評価してください。" },
+      { key: "seo", labelKey: "write.tool.seo", buildPrompt: () => "この記事のテーマに関連するSEOキーワードを提案し、それぞれの検索意図を整理してください。" },
+      { key: "target", labelKey: "write.tool.target", buildPrompt: () => "この記事は誰に向けて書かれているか、読者ターゲットを分析してください。文体・専門度がそのターゲットに合っているかも評価してください。" },
     ],
   },
   {
-    title: "執筆支援",
+    titleKey: "write.group.assist",
     tools: [
-      { key: "continue", label: "▶ 続きを書く", mode: "continue" },
-      { key: "improve", label: "✎ 文章を改善", buildPrompt: () => "この文章を読みやすく、魅力的に書き直してください。" },
-      { key: "headline", label: "🏷 見出し・タイトル改善", buildPrompt: () => "この記事の見出し・タイトルを、読者に伝わりやすく魅力的な案に改善してください。3案提案してください。" },
+      { key: "continue", labelKey: "write.tool.continue", mode: "continue" },
+      { key: "improve", labelKey: "write.tool.improve", buildPrompt: () => "この文章を読みやすく、魅力的に書き直してください。" },
+      { key: "headline", labelKey: "write.tool.headline", buildPrompt: () => "この記事の見出し・タイトルを、読者に伝わりやすく魅力的な案に改善してください。3案提案してください。" },
     ],
   },
   {
-    title: "品質チェック",
+    titleKey: "write.group.quality",
     tools: [
-      { key: "structureCheck", label: "🧩 構成チェック", buildPrompt: () => "この文章の構成を分析し、改善案を提案してください。" },
-      { key: "factCheck", label: "✅ ファクトチェック", buildPrompt: () => "この記事の内容に事実誤認や誤った情報がないか、あなたの知識に基づいて指摘してください。断定はせず、確認が必要な箇所として提示してください。" },
-      { key: "consistency", label: "⚠ 矛盾チェック", buildPrompt: () => "この文章内で時系列・数値・固有名詞などに矛盾がないか指摘してください。" },
-      { key: "review", label: "👀 読者レビュー", buildPrompt: () => "この文章を読者目線で評価し、改善点を具体的に提案してください。" },
-      { key: "typo", label: "🔤 誤字脱字チェック", buildPrompt: () => "この文章に誤字脱字・表記ゆれ・文法的な誤りがないかチェックし、該当箇所と修正案を一覧にしてください。" },
+      { key: "structureCheck", labelKey: "write.tool.structureCheck", buildPrompt: () => "この文章の構成を分析し、改善案を提案してください。" },
+      { key: "factCheck", labelKey: "write.tool.factCheck", buildPrompt: () => "この記事の内容に事実誤認や誤った情報がないか、あなたの知識に基づいて指摘してください。断定はせず、確認が必要な箇所として提示してください。" },
+      { key: "consistency", labelKey: "write.tool.consistency", buildPrompt: () => "この文章内で時系列・数値・固有名詞などに矛盾がないか指摘してください。" },
+      { key: "review", labelKey: "write.tool.review", buildPrompt: () => "この文章を読者目線で評価し、改善点を具体的に提案してください。" },
+      { key: "typo", labelKey: "write.tool.typo", buildPrompt: () => "この文章に誤字脱字・表記ゆれ・文法的な誤りがないかチェックし、該当箇所と修正案を一覧にしてください。" },
     ],
   },
   {
-    title: "変換・要約",
+    titleKey: "write.group.convert",
     tools: [
-      { key: "summary", label: "📝 要約", mode: "summary" },
+      { key: "summary", labelKey: "write.tool.summary", mode: "summary" },
       {
         key: "convert",
-        label: "🔁 複数媒体への変換",
-        options: ["SNS投稿", "メルマガ", "プレスリリース"],
+        labelKey: "write.tool.convert",
+        options: [
+          { value: "SNS投稿", labelKey: "write.opt.sns" },
+          { value: "メルマガ", labelKey: "write.opt.newsletter" },
+          { value: "プレスリリース", labelKey: "write.opt.pressRelease" },
+        ],
         buildPrompt: (choice) => `この記事を${choice}向けに書き直してください。文字数や文体はその媒体に適した形にしてください。`,
       },
-      { key: "catchphrase", label: "📣 キャッチコピー生成", buildPrompt: () => "この記事の内容をもとに、読者の興味を引くキャッチコピーを5案提案してください。短く印象的なものと、内容を具体的に伝えるものをバランスよく含めてください。" },
+      { key: "catchphrase", labelKey: "write.tool.catchphrase", buildPrompt: () => "この記事の内容をもとに、読者の興味を引くキャッチコピーを5案提案してください。短く印象的なものと、内容を具体的に伝えるものをバランスよく含めてください。" },
     ],
   },
 ];
@@ -69,6 +83,8 @@ const TOOL_GROUPS: { title: string; tools: Tool[] }[] = [
 type Revision = { id: number; title: string; summary: string; created_at: string };
 
 export default function WritePanel({ project }: { project: Project }) {
+  const t = useT();
+  const locale = useLocale();
   const [es, setEs] = useState<Episode[]>([]);
   const [e, setE] = useState<Episode | null>(null);
   const [ai, setAi] = useState("");
@@ -136,7 +152,7 @@ export default function WritePanel({ project }: { project: Project }) {
   async function createArticle() {
     if (!newTitle.trim()) return;
     const number = (es[es.length - 1]?.number || 0) + 1;
-    const template = templates.find((t) => t.id === newTemplateId);
+    const template = templates.find((tpl) => tpl.id === newTemplateId);
     await post(`/projects/${project.id}/episodes`, { number, title: newTitle, summary: "", content: template?.structure || "" });
     setShowNewArticle(false);
     await load();
@@ -158,7 +174,7 @@ export default function WritePanel({ project }: { project: Project }) {
   }
   async function restoreRevision(revisionId: number) {
     if (!e) return;
-    if (!confirm("この版に復元しますか？現在の内容は履歴として保存されます。")) return;
+    if (!confirm(t("write.confirmRestore"))) return;
     const x = await post(`/episodes/${e.id}/revisions/${revisionId}/restore`, {});
     setE(x); setEs(es.map((v) => (v.id === x.id ? x : v))); setShowHistory(false);
   }
@@ -203,7 +219,7 @@ export default function WritePanel({ project }: { project: Project }) {
     setInst(instruction);
     const body = { project_id: project.id, episode_id: e.id, instruction, mode, rag_limit: 6 };
     let text = "";
-    const label = mode === "summary" ? "AIが要約を作成中です…" : mode === "continue" ? "AIが続きを執筆中です…" : mode === "proofread" ? "AIが文章を校正中です…" : "AIが文章を生成中です…";
+    const label = mode === "summary" ? t("write.aiSummary") : mode === "continue" ? t("write.aiContinue") : mode === "proofread" ? t("write.aiProofread") : t("write.aiGenerate");
     const act = llm.begin(label, { cancel: () => cancelStreamRef.current?.() });
     activityRef.current = act;
     cancelStreamRef.current = streamSSE(
@@ -211,7 +227,7 @@ export default function WritePanel({ project }: { project: Project }) {
       (data) => {
         const event = data as { delta?: string; error?: string; done?: boolean };
         if (event.error) { setAi(event.error); return; }
-        if (event.delta) { text += event.delta; setAi(text); act.update({ detail: `${text.length.toLocaleString()} 文字受信` }); }
+        if (event.delta) { text += event.delta; setAi(text); act.update({ detail: t("llm.charsReceived", { count: text.length.toLocaleString(locale) }) }); }
       },
       () => { act.end(); if (activityRef.current === act) activityRef.current = null; setBusy(false); },
       body,
@@ -262,9 +278,9 @@ export default function WritePanel({ project }: { project: Project }) {
       } else {
         await navigator.clipboard.writeText(e.content || "");
       }
-      setCopyStatus("コピーしました（Wordなどに貼り付けできます）");
+      setCopyStatus(t("write.copied"));
     } catch {
-      setCopyStatus("コピーに失敗しました。ブラウザのクリップボード権限をご確認ください。");
+      setCopyStatus(t("write.copyFailed"));
     } finally {
       setTimeout(() => setCopyStatus(null), 3000);
     }
@@ -272,7 +288,7 @@ export default function WritePanel({ project }: { project: Project }) {
 
   function openDocxImport() {
     if (!e) return;
-    if (!confirm("Wordファイルの内容で本文を上書きします。現在の内容は失われます（履歴からの復元は可能です）。よろしいですか？")) return;
+    if (!confirm(t("write.confirmDocx"))) return;
     docxInputRef.current?.click();
   }
   async function handleDocxImportFile(file: File) {
@@ -280,9 +296,9 @@ export default function WritePanel({ project }: { project: Project }) {
     try {
       const x = await postFile(`/episodes/${e.id}/docx-import`, file);
       setE(x); setEs(es.map((v) => (v.id === x.id ? x : v)));
-      setCopyStatus("Wordファイルを読み込みました");
+      setCopyStatus(t("write.docxLoaded"));
     } catch {
-      setCopyStatus("Wordファイルの読み込みに失敗しました。");
+      setCopyStatus(t("write.docxFailed"));
     } finally {
       setTimeout(() => setCopyStatus(null), 3000);
     }
@@ -293,33 +309,33 @@ export default function WritePanel({ project }: { project: Project }) {
   }
 
   const checklist = e ? [
-    { label: "タイトルが入力されている", ok: !!e.title.trim() },
-    { label: "概要（サマリー）が入力されている", ok: !!e.summary.trim() },
-    { label: "本文が400文字以上ある", ok: e.content.replace(/\s/g, "").length >= 400 },
-    { label: "画像が挿入されている（Markdown画像記法）", ok: /!\[[^\]]*\]\([^)]+\)/.test(e.content) },
-    { label: "出典が1件以上登録されている", ok: sources.length > 0 },
+    { label: t("write.check.title"), ok: !!e.title.trim() },
+    { label: t("write.check.summary"), ok: !!e.summary.trim() },
+    { label: t("write.check.length"), ok: e.content.replace(/\s/g, "").length >= 400 },
+    { label: t("write.check.image"), ok: /!\[[^\]]*\]\([^)]+\)/.test(e.content) },
+    { label: t("write.check.source"), ok: sources.length > 0 },
   ] : [];
 
   const newArticleModal = showNewArticle && (
     <div className="modalOverlay" onClick={() => setShowNewArticle(false)}>
       <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-        <h1>新規記事</h1>
-        <label>タイトル *<input value={newTitle} onChange={(x) => setNewTitle(x.target.value)} autoFocus /></label>
-        <label>テンプレート（任意）
+        <h1>{t("write.newArticleTitle")}</h1>
+        <label>{t("write.titleLabel")}<input value={newTitle} onChange={(x) => setNewTitle(x.target.value)} autoFocus /></label>
+        <label>{t("write.templateOptional")}
           <select value={newTemplateId} onChange={(x) => setNewTemplateId(x.target.value ? Number(x.target.value) : "")}>
-            <option value="">白紙から作成</option>
-            {templates.map((t) => <option key={t.id} value={t.id}>{t.name || "（無題のテンプレート）"}</option>)}
+            <option value="">{t("write.blank")}</option>
+            {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name || t("materials.untitledTemplate")}</option>)}
           </select>
         </label>
         <div className="modalActions">
-          <button onClick={() => setShowNewArticle(false)}>キャンセル</button>
-          <button onClick={createArticle} disabled={!newTitle.trim()}>作成する</button>
+          <button onClick={() => setShowNewArticle(false)}>{t("common.cancel")}</button>
+          <button onClick={createArticle} disabled={!newTitle.trim()}>{t("newProject.create")}</button>
         </div>
       </div>
     </div>
   );
 
-  if (!e) return <div className="panel"><p>記事がまだありません。</p><button className="add" onClick={openNewArticle}>＋ 記事を追加</button>{newArticleModal}</div>;
+  if (!e) return <div className="panel"><p>{t("write.noArticles")}</p><button className="add" onClick={openNewArticle}>{t("write.addArticle")}</button>{newArticleModal}</div>;
 
   return (
     <div
@@ -331,59 +347,59 @@ export default function WritePanel({ project }: { project: Project }) {
         <div className="episodes">
           {es.map((x) => <button className={e.id === x.id ? "ep active" : "ep"} onClick={() => setE(x)} key={x.id}>{x.title}</button>)}
         </div>
-        <button className="newEpisode" onClick={openNewArticle}>＋ 新規記事</button>
+        <button className="newEpisode" onClick={openNewArticle}>{t("write.newArticleBtn")}</button>
         <Resizer side="right" onPointerDown={leftPanel.startDrag} />
       </aside>
       <section className="main">
         <div className="aiToolbar">
-          <button className="aiToolbarOpen" disabled={busy} onClick={() => setShowTools(true)}>🛠 AIツール</button>
+          <button className="aiToolbarOpen" disabled={busy} onClick={() => setShowTools(true)}>{t("write.toolsOpen")}</button>
         </div>
         <div className="writeHead">
           <div><small>ARTICLE</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
           <div className="writeHeadActions">
-            <button className="historyButton" onClick={() => setShowSources((v) => !v)}>📚 出典（{sources.length}）</button>
-            <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
-            <button className="historyButton" onClick={() => setShowChecklist(true)}>✅ 公開前チェック</button>
-            <button className="historyButton" onClick={() => setShowProofread(true)}>📐 文章校正</button>
-            <button className="writeSaveButton" onClick={save}>{busy ? "保存中" : "保存"}</button>
+            <button className="historyButton" onClick={() => setShowSources((v) => !v)}>{t("write.sources", { count: sources.length })}</button>
+            <button className="historyButton" onClick={openHistory}>{t("write.history")}</button>
+            <button className="historyButton" onClick={() => setShowChecklist(true)}>{t("write.checklist")}</button>
+            <button className="historyButton" onClick={() => setShowProofread(true)}>{t("write.proofread")}</button>
+            <button className="writeSaveButton" onClick={save}>{busy ? t("write.saving") : t("write.save")}</button>
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
         {showSources && (
           <div className="sourcesPanel">
             <div className="sourcesList">
-              {sources.length === 0 && <p>まだ出典が登録されていません。</p>}
+              {sources.length === 0 && <p>{t("write.noSources")}</p>}
               {sources.map((s) => (
                 <div className="sourceRow" key={s.id}>
                   <div>
-                    <b>{s.title || "（無題）"}</b>
+                    <b>{s.title || t("common.untitled")}</b>
                     {s.url && <a href={s.url} target="_blank" rel="noreferrer">{s.url}</a>}
                     {s.note && <span>{s.note}</span>}
                   </div>
-                  <button onClick={() => removeSource(s.id)}>削除</button>
+                  <button onClick={() => removeSource(s.id)}>{t("common.delete")}</button>
                 </div>
               ))}
             </div>
             <div className="sourceForm">
-              <input value={sourceTitle} onChange={(x) => setSourceTitle(x.target.value)} placeholder="出典タイトル *" />
-              <input value={sourceUrl} onChange={(x) => setSourceUrl(x.target.value)} placeholder="URL（任意）" />
-              <input value={sourceNote} onChange={(x) => setSourceNote(x.target.value)} placeholder="メモ（任意）" />
-              <button onClick={addSource} disabled={!sourceTitle.trim()}>＋ 出典を追加</button>
+              <input value={sourceTitle} onChange={(x) => setSourceTitle(x.target.value)} placeholder={t("write.sourceTitlePh")} />
+              <input value={sourceUrl} onChange={(x) => setSourceUrl(x.target.value)} placeholder={t("write.sourceUrlPh")} />
+              <input value={sourceNote} onChange={(x) => setSourceNote(x.target.value)} placeholder={t("write.sourceNotePh")} />
+              <button onClick={addSource} disabled={!sourceTitle.trim()}>{t("write.addSource")}</button>
             </div>
           </div>
         )}
         <div className="summary"><small>SUMMARY</small><input value={e.summary} onChange={(x) => setE({ ...e, summary: x.target.value })} /></div>
         <div className="editorToolbar">
-          <button onClick={() => wrapSelection("**")} title="太字">B</button>
-          <button onClick={() => wrapSelection("*")} title="斜体"><i>I</i></button>
-          <button onClick={() => insertLinePrefix("## ")} title="見出し">H</button>
-          <button onClick={() => insertLinePrefix("> ")} title="引用">❝</button>
-          <button className={preview ? "on" : ""} onClick={() => setPreview((p) => !p)}>{preview ? "編集に戻る" : "プレビュー"}</button>
+          <button onClick={() => wrapSelection("**")} title={t("write.bold")}>B</button>
+          <button onClick={() => wrapSelection("*")} title={t("write.italic")}><i>I</i></button>
+          <button onClick={() => insertLinePrefix("## ")} title={t("write.heading")}>H</button>
+          <button onClick={() => insertLinePrefix("> ")} title={t("write.quote")}>❝</button>
+          <button className={preview ? "on" : ""} onClick={() => setPreview((p) => !p)}>{preview ? t("write.backToEdit") : t("write.preview")}</button>
           {voice.supported && (
-            <button className={voice.listening ? "on" : ""} onClick={voice.toggle} title="音声入力">{voice.listening ? "⏹ 停止" : "🎤 音声入力"}</button>
+            <button className={voice.listening ? "on" : ""} onClick={voice.toggle} title={t("write.voice")}>{voice.listening ? t("write.voiceStop") : t("write.voiceStart")}</button>
           )}
-          <button onClick={copyForWord} title="太字・見出しなどの書式を保ったまま、Wordなどに貼り付けられる形式でコピーします">📋 Wordにコピー</button>
-          <button onClick={openDocxImport} title="Wordファイル（.docx）を読み込み、本文を置き換えます">📥 Wordから読み込み</button>
+          <button onClick={copyForWord} title={t("write.copyWordTitle")}>{t("write.copyWord")}</button>
+          <button onClick={openDocxImport} title={t("write.importWordTitle")}>{t("write.importWord")}</button>
           <input
             ref={docxInputRef}
             type="file"
@@ -395,9 +411,9 @@ export default function WritePanel({ project }: { project: Project }) {
               ev.target.value = "";
             }}
           />
-          <button onClick={downloadDocx} title="本文をWordファイル（.docx）としてダウンロードします">📤 Wordでダウンロード</button>
+          <button onClick={downloadDocx} title={t("write.exportWordTitle")}>{t("write.exportWord")}</button>
           {copyStatus && <span className="savedNote">{copyStatus}</span>}
-          <span className="wordCount">{wordCount.toLocaleString()}文字</span>
+          <span className="wordCount">{t("write.wordCount", { count: wordCount.toLocaleString(locale) })}</span>
         </div>
         {preview ? (
           // Single-user app; the content is always this same user's own
@@ -411,35 +427,35 @@ export default function WritePanel({ project }: { project: Project }) {
       <aside className="right">
         <Resizer side="left" onPointerDown={rightPanel.startDrag} />
         <b>AI EDITOR</b>
-        <p className="context">Context Builder：本文、RAGを統合</p>
+        <p className="context">{t("write.context")}</p>
         <div className="actions">
-          <button onClick={() => aiRun("summary")}>要約</button>
-          <button onClick={() => setShowProofread(true)} title="スタイルガイドと照合し、差分を1件ずつ確認しながら修正します">校正</button>
+          <button onClick={() => aiRun("summary")}>{t("write.summaryBtn")}</button>
+          <button onClick={() => setShowProofread(true)} title={t("write.proofreadTitle")}>{t("write.proofreadBtn")}</button>
         </div>
-        <textarea className="instruction" value={inst} onChange={(x) => setInst(x.target.value)} placeholder="AIへの指示" />
-        <div className="result"><small>AI RESULT</small><pre>{busy ? "AI処理中..." : ai || "結果がここに表示されます"}</pre></div>
+        <textarea className="instruction" value={inst} onChange={(x) => setInst(x.target.value)} placeholder={t("write.instructionPh")} />
+        <div className="result"><small>AI RESULT</small><pre>{busy ? t("write.aiBusy") : ai || t("materials.resultPlaceholder")}</pre></div>
         {ai && (
           <div className="resultActions">
-            <button className="adopt" onClick={() => { setE({ ...e, content: e.content + "\n\n" + ai }); setAi(""); }}>＋ 本文に追加</button>
-            <button className="adopt" onClick={openDiffAgainstAi}>⇄ 差分プレビュー</button>
+            <button className="adopt" onClick={() => { setE({ ...e, content: e.content + "\n\n" + ai }); setAi(""); }}>{t("write.append")}</button>
+            <button className="adopt" onClick={openDiffAgainstAi}>{t("write.diffPreview")}</button>
           </div>
         )}
       </aside>
       {showTools && (
         <div className="modalOverlay" onClick={() => { setShowTools(false); setOpenChoiceTool(null); }}>
           <div className="modalCard toolPickerCard" onClick={(ev) => ev.stopPropagation()}>
-            <h1>AIツール</h1>
+            <h1>{t("write.toolsTitle")}</h1>
             {TOOL_GROUPS.map((group) => (
-              <div className="toolGroup" key={group.title}>
-                <small>{group.title}</small>
+              <div className="toolGroup" key={group.titleKey}>
+                <small>{t(group.titleKey)}</small>
                 <div className="toolGroupItems">
-                  {group.tools.map((t) => (
-                    <div key={t.key} className="toolItem">
-                      <button disabled={busy} onClick={() => (t.options ? setOpenChoiceTool(openChoiceTool === t.key ? null : t.key) : runTool(t))}>{t.label}</button>
-                      {t.options && openChoiceTool === t.key && (
+                  {group.tools.map((tool) => (
+                    <div key={tool.key} className="toolItem">
+                      <button disabled={busy} onClick={() => (tool.options ? setOpenChoiceTool(openChoiceTool === tool.key ? null : tool.key) : runTool(tool))}>{t(tool.labelKey)}</button>
+                      {tool.options && openChoiceTool === tool.key && (
                         <div className="toolChoices">
-                          {t.options.map((o) => (
-                            <button key={o} disabled={busy} onClick={() => runTool(t, o)}>{o}</button>
+                          {tool.options.map((o) => (
+                            <button key={o.value} disabled={busy} onClick={() => runTool(tool, o.value)}>{t(o.labelKey)}</button>
                           ))}
                         </div>
                       )}
@@ -448,31 +464,31 @@ export default function WritePanel({ project }: { project: Project }) {
                 </div>
               </div>
             ))}
-            <div className="modalActions"><button onClick={() => { setShowTools(false); setOpenChoiceTool(null); }}>閉じる</button></div>
+            <div className="modalActions"><button onClick={() => { setShowTools(false); setOpenChoiceTool(null); }}>{t("common.close")}</button></div>
           </div>
         </div>
       )}
       {showHistory && (
         <div className="modalOverlay" onClick={() => setShowHistory(false)}>
           <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-            <h1>変更履歴</h1>
-            <p style={{ color: "#687386", fontSize: 12, margin: 0 }}>本文を上書き保存するたびに、直前の版が最大20件まで保存されます。</p>
+            <h1>{t("write.historyTitle")}</h1>
+            <p style={{ color: "#687386", fontSize: 12, margin: 0 }}>{t("write.historyNote")}</p>
             {revisions.length === 0 ? (
-              <p>まだ履歴はありません（本文が変更されて保存されると記録されます）。</p>
+              <p>{t("write.noHistory")}</p>
             ) : (
               <div className="revisionList">
                 {revisions.map((r) => (
                   <div className="revisionRow" key={r.id}>
-                    <div><b>{r.title}</b><span>{new Date(r.created_at).toLocaleString("ja-JP")}</span></div>
+                    <div><b>{r.title}</b><span>{new Date(r.created_at).toLocaleString(locale)}</span></div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => compareRevision(r.id)}>比較</button>
-                      <button onClick={() => restoreRevision(r.id)}>この版に復元</button>
+                      <button onClick={() => compareRevision(r.id)}>{t("write.compare")}</button>
+                      <button onClick={() => restoreRevision(r.id)}>{t("write.restore")}</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            <div className="modalActions"><button onClick={() => setShowHistory(false)}>閉じる</button></div>
+            <div className="modalActions"><button onClick={() => setShowHistory(false)}>{t("common.close")}</button></div>
           </div>
         </div>
       )}
@@ -496,16 +512,16 @@ export default function WritePanel({ project }: { project: Project }) {
       {showChecklist && (
         <div className="modalOverlay" onClick={() => setShowChecklist(false)}>
           <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-            <h1>公開前チェックリスト</h1>
+            <h1>{t("write.checklistTitle")}</h1>
             <div className="checklist">
-              {checklist.map((c) => (
-                <div className={`checklistRow ${c.ok ? "ok" : "ng"}`} key={c.label}>
+              {checklist.map((c, i) => (
+                <div className={`checklistRow ${c.ok ? "ok" : "ng"}`} key={i}>
                   <span>{c.ok ? "✅" : "⚠"}</span>
                   <span>{c.label}</span>
                 </div>
               ))}
             </div>
-            <div className="modalActions"><button onClick={() => setShowChecklist(false)}>閉じる</button></div>
+            <div className="modalActions"><button onClick={() => setShowChecklist(false)}>{t("common.close")}</button></div>
           </div>
         </div>
       )}

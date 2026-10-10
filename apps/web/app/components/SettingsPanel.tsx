@@ -4,6 +4,7 @@ import { api, del, downloadFile, getAuth, post, postFile, put } from "../lib/api
 import { Project } from "../lib/types";
 import { ensureNotificationPermission, notify } from "../lib/notify";
 import { useLlmActivity } from "../lib/llmActivity";
+import { MessageKey, TFunction, useLocale, useT } from "../lib/i18n";
 
 type ImportJob = {
   id: number; mode: "writers" | "episodes"; source_filename: string;
@@ -30,11 +31,11 @@ type SystemSettings = {
   cors_origins: string; cors_origins_is_override: boolean;
 };
 
-const AI_PROVIDERS = [
-  { value: "ollama", label: "ローカルLLM（Ollama）" },
-  { value: "anthropic", label: "Claude（Anthropic）" },
-  { value: "openai", label: "ChatGPT（OpenAI）" },
-  { value: "google", label: "Gemini（Google）" },
+const AI_PROVIDERS: { value: string; labelKey: MessageKey }[] = [
+  { value: "ollama", labelKey: "settings.provider.ollama" },
+  { value: "anthropic", labelKey: "settings.provider.anthropic" },
+  { value: "openai", labelKey: "settings.provider.openai" },
+  { value: "google", labelKey: "settings.provider.google" },
 ];
 
 type UserAccount = { username: string; email: string | null; is_admin: boolean; is_active: boolean; created_at: string };
@@ -43,8 +44,8 @@ type AiUsageSummaryRow = { provider: string; model: string; calls: number; input
 type AiUsageSummary = { rows: AiUsageSummaryRow[]; total_calls: number; total_input_tokens: number; total_output_tokens: number; total_estimated_cost_usd: number | null };
 type AiUsageLogRow = { id: number; project_id: number | null; provider: string; model: string; input_tokens: number | null; output_tokens: number | null; estimated_cost_usd: number | null; created_at: string };
 
-function formatCost(v: number | null): string {
-  return v === null ? "不明" : `$${v.toFixed(4)}`;
+function formatCost(v: number | null, t: TFunction): string {
+  return v === null ? t("settings.usage.unknown") : `$${v.toFixed(4)}`;
 }
 
 // A style guide is never required to write, but leaving it truly blank
@@ -63,15 +64,24 @@ const DEFAULT_STYLE_GUIDE = [
   "・冗長な言い回しを避け、簡潔に書く",
 ].join("\n");
 
-const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
-  { key: "translation", label: "翻訳文書・ローカライズ", hint: "複数の翻訳者が関わるため、表現や文体（です・ます調など）を揃えるために必要。" },
-  { key: "technical", label: "Webサイト・マニュアル・技術文書（テクニカルライティング）", hint: "読者が迷わないよう、専門用語の扱い、簡潔な表現、レイアウトを統一する。" },
-  { key: "academic", label: "学術論文・研究レポート", hint: "引用の形式や文献リストの書き方（APA、MLA、シカゴ・マニュアルなど）を統一するため。" },
-  { key: "pr", label: "広報・ニュース・プレスリリース", hint: "企業イメージや媒体の信頼性を保つため、用字用語のルール（記者ハンドブックなど）が必要。" },
+// `key` is sent to the API; only labelKey / hintKey (the displayed text) are translated.
+const STYLE_GUIDE_CATEGORIES: { key: string; labelKey: MessageKey; hintKey: MessageKey }[] = [
+  { key: "translation", labelKey: "settings.cat.translation.label", hintKey: "settings.cat.translation.hint" },
+  { key: "technical", labelKey: "settings.cat.technical.label", hintKey: "settings.cat.technical.hint" },
+  { key: "academic", labelKey: "settings.cat.academic.label", hintKey: "settings.cat.academic.hint" },
+  { key: "pr", labelKey: "settings.cat.pr.label", hintKey: "settings.cat.pr.hint" },
 ];
+// These Japanese strings are the values sent to the API (and interpolated into
+// the LLM prompt) - only their displayed labels are translated.
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
+const CITATION_LABEL_KEYS: Record<string, MessageKey> = {
+  "シカゴ・マニュアル": "settings.cite.chicago",
+  "その他": "settings.cite.other",
+};
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
+  const t = useT();
+  const locale = useLocale();
   const [tab, setTab] = useState<"basic" | "connection" | "usage" | "users" | "import" | "backup" | "export">("basic");
   const [usageSummary, setUsageSummary] = useState<AiUsageSummary | null>(null);
   const [usageRecent, setUsageRecent] = useState<AiUsageLogRow[]>([]);
@@ -125,12 +135,12 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   async function testConnection(resultKey: string, target: string, url?: string, model?: string, apiKey?: string) {
     setTestResults((prev) => ({ ...prev, [resultKey]: "testing" }));
-    const act = llm.begin("接続テストを実行中です…");
+    const act = llm.begin(t("settings.test.working"));
     try {
       const r: TestResult = await post("/system-settings/test-connection", { target, url, model, api_key: apiKey });
       setTestResults((prev) => ({ ...prev, [resultKey]: r }));
     } catch {
-      setTestResults((prev) => ({ ...prev, [resultKey]: { ok: false, message: "テストに失敗しました（通信エラー）。", latency_ms: 0 } }));
+      setTestResults((prev) => ({ ...prev, [resultKey]: { ok: false, message: t("settings.test.failed"), latency_ms: 0 } }));
     } finally { act.end(); }
   }
 
@@ -140,11 +150,11 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
         <button type="button" onClick={() => testConnection(key, target, url, model, apiKey)} disabled={result === "testing"}>
-          {result === "testing" ? "テスト中..." : "接続テスト"}
+          {result === "testing" ? t("settings.test.testing") : t("settings.test.button")}
         </button>
         {result && result !== "testing" && (
           <span className={result.ok ? "savedNote" : "errorNote"}>
-            {result.ok ? "✓" : "✗"} {result.message}（{result.latency_ms}ms）
+            {result.ok ? "✓" : "✗"} {result.message}{t("settings.test.latency", { ms: result.latency_ms })}
           </span>
         )}
       </span>
@@ -195,7 +205,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   function loadUsers() {
     setUsersError("");
-    api("/users").then(setUsers).catch(() => setUsersError("ユーザー一覧の読み込みに失敗しました。管理者権限が必要です。"));
+    api("/users").then(setUsers).catch(() => setUsersError(t("settings.users.loadFailed")));
   }
 
   useEffect(() => {
@@ -212,7 +222,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     setSelfPasswordError(""); setSelfPasswordSaved(false);
     if (!selfPasswordForm.current_password || !selfPasswordForm.new_password) return;
     if (selfPasswordForm.new_password !== selfPasswordForm.confirm_password) {
-      setSelfPasswordError("新しいパスワード（確認）が一致しません。");
+      setSelfPasswordError(t("settings.users.mismatch"));
       return;
     }
     setSelfPasswordBusy(true);
@@ -221,7 +231,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSelfPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
       setSelfPasswordSaved(true);
     } catch {
-      setSelfPasswordError("現在のパスワードが正しくありません。");
+      setSelfPasswordError(t("settings.users.wrongCurrent"));
     } finally { setSelfPasswordBusy(false); }
   }
 
@@ -232,7 +242,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setEmailEditFor(null); setEmailEditValue("");
       loadUsers();
     } catch {
-      setUsersError("メールアドレスの更新に失敗しました。");
+      setUsersError(t("settings.users.errEmail"));
     }
   }
 
@@ -244,7 +254,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setNewUser({ username: "", password: "", is_admin: false });
       loadUsers();
     } catch {
-      setUsersError("ユーザーの追加に失敗しました。ユーザー名が既に使われている可能性があります。");
+      setUsersError(t("settings.users.errAdd"));
     } finally { setUserBusy(false); }
   }
 
@@ -254,7 +264,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       await put(`/users/${encodeURIComponent(username)}`, { is_active });
       loadUsers();
     } catch {
-      setUsersError("更新に失敗しました。唯一の有効な管理者を無効化することはできません。");
+      setUsersError(t("settings.users.errActive"));
     }
   }
 
@@ -264,7 +274,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       await put(`/users/${encodeURIComponent(username)}`, { is_admin });
       loadUsers();
     } catch {
-      setUsersError("更新に失敗しました。唯一の管理者を降格することはできません。");
+      setUsersError(t("settings.users.errDemote"));
     }
   }
 
@@ -275,18 +285,18 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       await post(`/users/${encodeURIComponent(username)}/password`, { new_password: resetPasswordValue });
       setResetPasswordFor(null); setResetPasswordValue("");
     } catch {
-      setUsersError("パスワードの変更に失敗しました。");
+      setUsersError(t("settings.users.errPassword"));
     }
   }
 
   async function deleteUserAccount(username: string) {
-    if (!window.confirm(`ユーザー「${username}」を削除しますか？この操作は取り消せません。`)) return;
+    if (!window.confirm(t("settings.users.confirmDelete", { name: username }))) return;
     setUsersError("");
     try {
       await del(`/users/${encodeURIComponent(username)}`);
       loadUsers();
     } catch {
-      setUsersError("削除に失敗しました。");
+      setUsersError(t("settings.users.errDelete"));
     }
   }
 
@@ -348,8 +358,8 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         if ((latest.status === "completed" || latest.status === "error") && importTimer.current) {
           clearInterval(importTimer.current);
           notify(
-            latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
-            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}話・更新${latest.updated_episodes}話）` : `: ${latest.last_message}`}`,
+            latest.status === "completed" ? t("import.notifyDone") : t("import.notifyError"),
+            `${latest.source_filename}${latest.status === "completed" ? t("settings.import.summaryDone", { created: latest.created_episodes, updated: latest.updated_episodes }) : `: ${latest.last_message}`}`,
           );
         }
       }, 2000);
@@ -374,7 +384,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
 
   async function generateStyleGuide(category: string, detail?: string) {
     setStyleGuideBusy(true);
-    const act = llm.begin("スタイルガイドを生成中です…");
+    const act = llm.begin(t("settings.basic.generatingWorking"));
     try {
       const { style_guide }: { style_guide: string } = await post(`/projects/${project.id}/style-guide/generate`, { category, detail: detail || "" });
       setForm((f) => ({ ...f, style_guide }));
@@ -386,43 +396,43 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   return (
     <div className="panel">
       <small>SETTINGS</small>
-      <h1>設定</h1>
+      <h1>{t("settings.title")}</h1>
       <div className="twinTabs">
-        <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>基本設定</button>
-        <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
-        <button className={tab === "usage" ? "on" : ""} onClick={() => setTab("usage")}>使用状況</button>
-        <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>ユーザー管理</button>
-        <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>インポート</button>
-        <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>バックアップ</button>
-        <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
+        <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>{t("settings.tab.basic")}</button>
+        <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>{t("settings.tab.connection")}</button>
+        <button className={tab === "usage" ? "on" : ""} onClick={() => setTab("usage")}>{t("settings.tab.usage")}</button>
+        <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>{t("settings.tab.users")}</button>
+        <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>{t("settings.tab.import")}</button>
+        <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>{t("settings.tab.backup")}</button>
+        <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>{t("settings.tab.export")}</button>
       </div>
       {tab === "basic" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
-          <label>作品名<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-          <label>ジャンル<input value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })} /></label>
-          <label>あらすじ<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-          <label>作品ルール（詳細設定）<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
+          <label>{t("settings.basic.name")}<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+          <label>{t("settings.basic.genre")}<input value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })} /></label>
+          <label>{t("settings.basic.description")}<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+          <label>{t("settings.basic.rules")}<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
           <label style={{ gridColumn: "1/-1" }}>
-            スタイルガイド
-            <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder="「スタイルガイド生成」で作成するか、直接入力してください。" style={{ minHeight: 120 }} />
+            {t("settings.basic.styleGuide")}
+            <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder={t("settings.basic.styleGuidePh")} style={{ minHeight: 120 }} />
           </label>
           <div style={{ gridColumn: "1/-1" }}>
-            <button type="button" onClick={() => setShowStyleGuidePicker(true)} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "📐 スタイルガイド生成"}</button>
+            <button type="button" onClick={() => setShowStyleGuidePicker(true)} disabled={styleGuideBusy}>{styleGuideBusy ? t("settings.basic.generating") : t("settings.basic.generate")}</button>
           </div>
           <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-            用途に近い種類を選ぶと、既存の本文サンプルの文体・表記の傾向も踏まえて、より適したスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。
+            {t("settings.basic.styleGuideNote")}
           </p>
           <div className="entityFormActions">
-            <button onClick={save} disabled={busy}>{busy ? "保存中..." : "保存"}</button>
-            {saved && <span className="savedNote">保存しました</span>}
+            <button onClick={save} disabled={busy}>{busy ? t("settings.saving") : t("settings.save")}</button>
+            {saved && <span className="savedNote">{t("settings.saved")}</span>}
           </div>
         </div>
       )}
       {showStyleGuidePicker && (
         <div className="modalOverlay" onClick={() => { setShowStyleGuidePicker(false); setPendingAcademic(false); }}>
           <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-            <h1>スタイルガイドの種類を選択</h1>
-            <p style={{ color: "#687386", fontSize: 12 }}>用途に近いものを選んでください。</p>
+            <h1>{t("settings.picker.title")}</h1>
+            <p style={{ color: "#687386", fontSize: 12 }}>{t("settings.picker.hint")}</p>
             {!pendingAcademic && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {STYLE_GUIDE_CATEGORIES.map((c) => (
@@ -433,8 +443,8 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                     onClick={() => (c.key === "academic" ? setPendingAcademic(true) : generateStyleGuide(c.key))}
                     style={{ textAlign: "left" }}
                   >
-                    <b>{c.label}</b>
-                    <div style={{ fontSize: 11, color: "#687386", fontWeight: "normal" }}>{c.hint}</div>
+                    <b>{t(c.labelKey)}</b>
+                    <div style={{ fontSize: 11, color: "#687386", fontWeight: "normal" }}>{t(c.hintKey)}</div>
                   </button>
                 ))}
               </div>
@@ -442,136 +452,136 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
             {pendingAcademic && (
               <>
                 <label>
-                  引用形式
+                  {t("settings.picker.citation")}
                   <select value={academicDetail} onChange={(e) => setAcademicDetail(e.target.value)}>
-                    {ACADEMIC_CITATION_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {ACADEMIC_CITATION_STYLES.map((s) => <option key={s} value={s}>{CITATION_LABEL_KEYS[s] ? t(CITATION_LABEL_KEYS[s]) : s}</option>)}
                   </select>
                 </label>
                 <div className="modalActions">
-                  <button type="button" onClick={() => setPendingAcademic(false)}>戻る</button>
-                  <button type="button" onClick={() => generateStyleGuide("academic", academicDetail)} disabled={styleGuideBusy}>{styleGuideBusy ? "生成中..." : "この形式で生成する"}</button>
+                  <button type="button" onClick={() => setPendingAcademic(false)}>{t("settings.picker.back")}</button>
+                  <button type="button" onClick={() => generateStyleGuide("academic", academicDetail)} disabled={styleGuideBusy}>{styleGuideBusy ? t("settings.basic.generating") : t("settings.picker.generateThis")}</button>
                 </div>
               </>
             )}
             <div className="modalActions">
-              <button type="button" onClick={() => { setShowStyleGuidePicker(false); setPendingAcademic(false); }}>キャンセル</button>
+              <button type="button" onClick={() => { setShowStyleGuidePicker(false); setPendingAcademic(false); }}>{t("common.cancel")}</button>
             </div>
           </div>
         </div>
       )}
       {tab === "connection" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
-          {!sys && <p style={{ gridColumn: "1/-1" }}>読み込み中...</p>}
+          {!sys && <p style={{ gridColumn: "1/-1" }}>{t("common.loading")}</p>}
           {sys && (
             <>
               <label>
-                SQL（データベース）<input value={sys.database_url_masked} readOnly disabled />
+                {t("settings.conn.sql")}<input value={sys.database_url_masked} readOnly disabled />
               </label>
               <div><TestButton target="database" /></div>
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                データベース接続先は稼働中のアプリから安全に切り替えられないため、読み取り専用です。変更するにはサーバーの環境変数 <code>DATABASE_URL</code> を編集して再起動してください。
+                {t("settings.conn.dbNotePre")}<code>DATABASE_URL</code>{t("settings.conn.dbNotePost")}
               </p>
 
               <label>
-                Qdrant URL {sys.qdrant_url_is_override && <span className="savedNote">（上書き中）</span>}
+                Qdrant URL {sys.qdrant_url_is_override && <span className="savedNote">{t("settings.conn.override")}</span>}
                 <input value={sysForm.qdrant_url} onChange={(e) => setSysForm({ ...sysForm, qdrant_url: e.target.value })} placeholder="http://qdrant:6333" />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="qdrant" url={sysForm.qdrant_url} />
-                {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>既定値に戻す</button>}
+                {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>{t("settings.conn.reset")}</button>}
               </div>
 
               <label>
-                Ollama 1（Writer）URL {sys.ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
+                {t("settings.conn.ollamaUrl")} {sys.ollama_url_is_override && <span className="savedNote">{t("settings.conn.override")}</span>}
                 <input value={sysForm.ollama_url} onChange={(e) => setSysForm({ ...sysForm, ollama_url: e.target.value })} placeholder="http://ollama:11434" />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="ollama" url={sysForm.ollama_url} model={sysForm.ollama_model} apiKey={sysForm.ollama_api_key} />
-                {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+                {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>{t("settings.conn.reset")}</button>}
               </div>
 
               <label>
-                Ollama 1（Writer）モデル {sys.ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
+                {t("settings.conn.ollamaModel")} {sys.ollama_model_is_override && <span className="savedNote">{t("settings.conn.override")}</span>}
                 <input value={sysForm.ollama_model} onChange={(e) => setSysForm({ ...sysForm, ollama_model: e.target.value })} />
               </label>
-              {sys.ollama_model_is_override && <button type="button" onClick={() => resetField("ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
+              {sys.ollama_model_is_override && <button type="button" onClick={() => resetField("ollama_model")} disabled={sysBusy}>{t("settings.conn.reset")}</button>}
 
               <label>
-                Ollama 1（Writer）埋め込みモデル {sys.ollama_embed_model_is_override && <span className="savedNote">（上書き中）</span>}
+                {t("settings.conn.ollamaEmbed")} {sys.ollama_embed_model_is_override && <span className="savedNote">{t("settings.conn.override")}</span>}
                 <input value={sysForm.ollama_embed_model} onChange={(e) => setSysForm({ ...sysForm, ollama_embed_model: e.target.value })} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} apiKey={sysForm.ollama_api_key} />
-                {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
+                {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>{t("settings.conn.reset")}</button>}
               </div>
 
               <label>
-                Ollama APIキー（任意） {sys.ollama_api_key_is_set && <span className="savedNote">（設定済み）</span>}
-                <input type="password" value={sysForm.ollama_api_key} onChange={(e) => setSysForm({ ...sysForm, ollama_api_key: e.target.value })} placeholder={sys.ollama_api_key_is_set ? "変更する場合のみ入力" : "認証が必要なリモート/プロキシ経由のOllamaのみ"} />
+                {t("settings.conn.ollamaKey")} {sys.ollama_api_key_is_set && <span className="savedNote">{t("settings.conn.isSet")}</span>}
+                <input type="password" value={sysForm.ollama_api_key} onChange={(e) => setSysForm({ ...sysForm, ollama_api_key: e.target.value })} placeholder={sys.ollama_api_key_is_set ? t("settings.conn.keyChange") : t("settings.conn.ollamaKeyPh")} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="ollama" resultKey="ollama_api_key" url={sysForm.ollama_url} model={sysForm.ollama_model} apiKey={sysForm.ollama_api_key} />
-                {sys.ollama_api_key_is_set && <button type="button" onClick={() => resetField("ollama_api_key")} disabled={sysBusy}>クリア</button>}
+                {sys.ollama_api_key_is_set && <button type="button" onClick={() => resetField("ollama_api_key")} disabled={sysBusy}>{t("settings.conn.clear")}</button>}
               </div>
 
               <label style={{ gridColumn: "1/-1" }}>
-                使用するAIプロバイダー（記事生成・チャット・資料要約に使用）
+                {t("settings.conn.provider")}
                 <select value={sysForm.ai_provider} onChange={(e) => setSysForm({ ...sysForm, ai_provider: e.target.value })}>
-                  {AI_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  {AI_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{t(p.labelKey)}</option>)}
                 </select>
               </label>
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                「ローカルLLM（Ollama）」を選ぶと、上のOllama 1（Writer）の設定が使われます。APIキーは保存後は値を表示しません（安全のため）。接続テストは、まだ保存していない場合は今入力した値でテストされます。
+                {t("settings.conn.providerNote")}
               </p>
 
               <label>
-                Claude（Anthropic）APIキー {sys.anthropic_api_key_is_set && <span className="savedNote">（設定済み）</span>}
-                <input type="password" value={sysForm.anthropic_api_key} onChange={(e) => setSysForm({ ...sysForm, anthropic_api_key: e.target.value })} placeholder={sys.anthropic_api_key_is_set ? "変更する場合のみ入力" : "sk-ant-..."} />
+                {t("settings.conn.anthropicKey")} {sys.anthropic_api_key_is_set && <span className="savedNote">{t("settings.conn.isSet")}</span>}
+                <input type="password" value={sysForm.anthropic_api_key} onChange={(e) => setSysForm({ ...sysForm, anthropic_api_key: e.target.value })} placeholder={sys.anthropic_api_key_is_set ? t("settings.conn.keyChange") : "sk-ant-..."} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="anthropic" model={sysForm.anthropic_model} apiKey={sysForm.anthropic_api_key} />
-                {sys.anthropic_api_key_is_set && <button type="button" onClick={() => resetField("anthropic_api_key")} disabled={sysBusy}>クリア</button>}
+                {sys.anthropic_api_key_is_set && <button type="button" onClick={() => resetField("anthropic_api_key")} disabled={sysBusy}>{t("settings.conn.clear")}</button>}
               </div>
               <label>
-                Claude モデル名
+                {t("settings.conn.anthropicModel")}
                 <input value={sysForm.anthropic_model} onChange={(e) => setSysForm({ ...sysForm, anthropic_model: e.target.value })} placeholder="claude-sonnet-4-5" />
               </label>
               <div />
 
               <label>
-                ChatGPT（OpenAI）APIキー {sys.openai_api_key_is_set && <span className="savedNote">（設定済み）</span>}
-                <input type="password" value={sysForm.openai_api_key} onChange={(e) => setSysForm({ ...sysForm, openai_api_key: e.target.value })} placeholder={sys.openai_api_key_is_set ? "変更する場合のみ入力" : "sk-..."} />
+                {t("settings.conn.openaiKey")} {sys.openai_api_key_is_set && <span className="savedNote">{t("settings.conn.isSet")}</span>}
+                <input type="password" value={sysForm.openai_api_key} onChange={(e) => setSysForm({ ...sysForm, openai_api_key: e.target.value })} placeholder={sys.openai_api_key_is_set ? t("settings.conn.keyChange") : "sk-..."} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="openai" model={sysForm.openai_model} apiKey={sysForm.openai_api_key} />
-                {sys.openai_api_key_is_set && <button type="button" onClick={() => resetField("openai_api_key")} disabled={sysBusy}>クリア</button>}
+                {sys.openai_api_key_is_set && <button type="button" onClick={() => resetField("openai_api_key")} disabled={sysBusy}>{t("settings.conn.clear")}</button>}
               </div>
               <label>
-                ChatGPT モデル名
+                {t("settings.conn.openaiModel")}
                 <input value={sysForm.openai_model} onChange={(e) => setSysForm({ ...sysForm, openai_model: e.target.value })} placeholder="gpt-4o-mini" />
               </label>
               <div />
 
               <label>
-                Gemini（Google）APIキー {sys.google_api_key_is_set && <span className="savedNote">（設定済み）</span>}
-                <input type="password" value={sysForm.google_api_key} onChange={(e) => setSysForm({ ...sysForm, google_api_key: e.target.value })} placeholder={sys.google_api_key_is_set ? "変更する場合のみ入力" : "AIza..."} />
+                {t("settings.conn.googleKey")} {sys.google_api_key_is_set && <span className="savedNote">{t("settings.conn.isSet")}</span>}
+                <input type="password" value={sysForm.google_api_key} onChange={(e) => setSysForm({ ...sysForm, google_api_key: e.target.value })} placeholder={sys.google_api_key_is_set ? t("settings.conn.keyChange") : "AIza..."} />
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <TestButton target="google" model={sysForm.google_model} apiKey={sysForm.google_api_key} />
-                {sys.google_api_key_is_set && <button type="button" onClick={() => resetField("google_api_key")} disabled={sysBusy}>クリア</button>}
+                {sys.google_api_key_is_set && <button type="button" onClick={() => resetField("google_api_key")} disabled={sysBusy}>{t("settings.conn.clear")}</button>}
               </div>
               <label>
-                Gemini モデル名
+                {t("settings.conn.googleModel")}
                 <input value={sysForm.google_model} onChange={(e) => setSysForm({ ...sysForm, google_model: e.target.value })} placeholder="gemini-2.0-flash" />
               </label>
               <div />
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれもステートレスなため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
+                {t("settings.conn.footNote")}
               </p>
               <div className="entityFormActions">
-                <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? "保存中..." : "保存"}</button>
-                {sysSaved && <span className="savedNote">保存しました</span>}
+                <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? t("settings.saving") : t("settings.save")}</button>
+                {sysSaved && <span className="savedNote">{t("settings.saved")}</span>}
               </div>
             </>
           )}
@@ -579,39 +589,39 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       )}
       {tab === "usage" && (
         <div style={{ marginTop: 14 }}>
-          {!usageSummary && <p>読み込み中...</p>}
+          {!usageSummary && <p>{t("common.loading")}</p>}
           {usageSummary && (
             <>
               <p style={{ color: "#687386", fontSize: 12 }}>
-                プロジェクトを問わず、このサーバー全体でのAI呼び出し実績です。金額は概算の目安であり、実際の請求額とは異なる場合があります（不明な場合は「不明」と表示されます）。ローカルLLM（Ollama）は常に$0として扱います。
+                {t("settings.usage.note")}
               </p>
               <div className="progressStats">
-                <div><small>総呼び出し回数</small><b>{usageSummary.total_calls}</b></div>
-                <div><small>入力トークン合計</small><b>{usageSummary.total_input_tokens.toLocaleString()}</b></div>
-                <div><small>出力トークン合計</small><b>{usageSummary.total_output_tokens.toLocaleString()}</b></div>
-                <div><small>概算コスト合計</small><b>{formatCost(usageSummary.total_estimated_cost_usd)}</b></div>
+                <div><small>{t("settings.usage.totalCalls")}</small><b>{usageSummary.total_calls}</b></div>
+                <div><small>{t("settings.usage.totalIn")}</small><b>{usageSummary.total_input_tokens.toLocaleString(locale)}</b></div>
+                <div><small>{t("settings.usage.totalOut")}</small><b>{usageSummary.total_output_tokens.toLocaleString(locale)}</b></div>
+                <div><small>{t("settings.usage.totalCost")}</small><b>{formatCost(usageSummary.total_estimated_cost_usd, t)}</b></div>
               </div>
               <div className="stateTable" style={{ marginTop: 14 }}>
-                {usageSummary.rows.length === 0 && <p style={{ padding: 12 }}>まだAI呼び出しの記録がありません。</p>}
+                {usageSummary.rows.length === 0 && <p style={{ padding: 12 }}>{t("settings.usage.none")}</p>}
                 {usageSummary.rows.map((r) => (
                   <div className="stateRow" key={`${r.provider}-${r.model}`} style={{ gridTemplateColumns: "1fr 1fr 80px 100px 100px 100px" }}>
                     <span>{r.provider}</span>
                     <span>{r.model}</span>
-                    <span>{r.calls}回</span>
-                    <span>入力 {r.input_tokens.toLocaleString()}</span>
-                    <span>出力 {r.output_tokens.toLocaleString()}</span>
-                    <span>{formatCost(r.estimated_cost_usd)}</span>
+                    <span>{t("settings.usage.calls", { count: r.calls })}</span>
+                    <span>{t("settings.usage.in", { count: r.input_tokens.toLocaleString(locale) })}</span>
+                    <span>{t("settings.usage.out", { count: r.output_tokens.toLocaleString(locale) })}</span>
+                    <span>{formatCost(r.estimated_cost_usd, t)}</span>
                   </div>
                 ))}
               </div>
               <div style={{ marginTop: 20 }}>
-                <small>直近の呼び出し履歴（最新{usageRecent.length}件）</small>
-                {usageRecent.length === 0 && <p className="searchSource">まだ履歴がありません。</p>}
+                <small>{t("settings.usage.recent", { count: usageRecent.length })}</small>
+                {usageRecent.length === 0 && <p className="searchSource">{t("settings.usage.noHistory")}</p>}
                 {usageRecent.map((r) => (
                   <div className="resultCard" key={r.id}>
                     <b>{r.provider} / {r.model}</b>
                     <p>
-                      入力{r.input_tokens ?? "?"}・出力{r.output_tokens ?? "?"}トークン / {formatCost(r.estimated_cost_usd)} / {new Date(r.created_at).toLocaleString("ja-JP")}
+                      {t("settings.usage.entry", { input: r.input_tokens ?? "?", output: r.output_tokens ?? "?", cost: formatCost(r.estimated_cost_usd, t), date: new Date(r.created_at).toLocaleString(locale) })}
                     </p>
                   </div>
                 ))}
@@ -623,17 +633,17 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       {tab === "users" && (
         <div style={{ marginTop: 14 }}>
           <div className="entityForm">
-            <small>パスワードを変更</small>
+            <small>{t("settings.users.changePw")}</small>
             <input
-              type="password" placeholder="現在のパスワード" value={selfPasswordForm.current_password}
+              type="password" placeholder={t("settings.users.currentPh")} value={selfPasswordForm.current_password}
               onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, current_password: e.target.value })}
             />
             <input
-              type="password" placeholder="新しいパスワード" value={selfPasswordForm.new_password}
+              type="password" placeholder={t("settings.users.newPh")} value={selfPasswordForm.new_password}
               onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, new_password: e.target.value })}
             />
             <input
-              type="password" placeholder="新しいパスワード（確認）" value={selfPasswordForm.confirm_password}
+              type="password" placeholder={t("settings.users.confirmPh")} value={selfPasswordForm.confirm_password}
               onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, confirm_password: e.target.value })}
             />
             <div className="entityFormActions">
@@ -641,18 +651,18 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 onClick={changeOwnPassword}
                 disabled={selfPasswordBusy || !selfPasswordForm.current_password || !selfPasswordForm.new_password}
               >
-                {selfPasswordBusy ? "変更中..." : "パスワードを変更"}
+                {selfPasswordBusy ? t("settings.users.changing") : t("settings.users.changePw")}
               </button>
-              {selfPasswordSaved && <span className="savedNote">変更しました</span>}
+              {selfPasswordSaved && <span className="savedNote">{t("settings.users.changed")}</span>}
             </div>
             {selfPasswordError && <p className="errorNote">{selfPasswordError}</p>}
           </div>
 
           {isAdmin && (
             <div style={{ marginTop: 28 }}>
-              <small>ユーザー管理（管理者のみ）</small>
+              <small>{t("settings.users.adminTitle")}</small>
               {usersError && <p className="errorNote">{usersError}</p>}
-              {!users && !usersError && <p>読み込み中...</p>}
+              {!users && !usersError && <p>{t("common.loading")}</p>}
               {users && (
                 <>
                   <div className="stateTable" style={{ marginTop: 8 }}>
@@ -660,30 +670,30 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                       const isSelf = u.username === currentUsername;
                       return (
                         <div className="stateRow" key={u.username} style={{ gridTemplateColumns: "1fr 90px 90px 1fr 1fr 130px" }}>
-                          <span><b>{u.username}</b>{isSelf && <small style={{ color: "#687386" }}>（自分）</small>}</span>
+                          <span><b>{u.username}</b>{isSelf && <small style={{ color: "#687386" }}>{t("settings.users.self")}</small>}</span>
                           <span>
                             <label>
-                              <input type="checkbox" checked={u.is_admin} onChange={(e) => setUserAdmin(u.username, e.target.checked)} /> 管理者
+                              <input type="checkbox" checked={u.is_admin} onChange={(e) => setUserAdmin(u.username, e.target.checked)} /> {t("settings.users.admin")}
                             </label>
                           </span>
                           <span>
                             <label>
-                              <input type="checkbox" checked={u.is_active} onChange={(e) => setUserActive(u.username, e.target.checked)} /> 有効
+                              <input type="checkbox" checked={u.is_active} onChange={(e) => setUserActive(u.username, e.target.checked)} /> {t("settings.users.active")}
                             </label>
                           </span>
                           <span>
                             {emailEditFor === u.username ? (
                               <span style={{ display: "flex", gap: 6 }}>
                                 <input
-                                  type="email" placeholder="メールアドレス" value={emailEditValue}
+                                  type="email" placeholder={t("settings.users.emailPh")} value={emailEditValue}
                                   onChange={(e) => setEmailEditValue(e.target.value)}
                                 />
-                                <button onClick={() => submitEmailEdit(u.username)}>保存</button>
-                                <button onClick={() => { setEmailEditFor(null); setEmailEditValue(""); }}>キャンセル</button>
+                                <button onClick={() => submitEmailEdit(u.username)}>{t("settings.save")}</button>
+                                <button onClick={() => { setEmailEditFor(null); setEmailEditValue(""); }}>{t("common.cancel")}</button>
                               </span>
                             ) : (
                               <button onClick={() => { setEmailEditFor(u.username); setEmailEditValue(u.email ?? ""); }}>
-                                {u.email || "メール未設定"}
+                                {u.email || t("settings.users.noEmail")}
                               </button>
                             )}
                           </span>
@@ -691,41 +701,41 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                             {resetPasswordFor === u.username ? (
                               <span style={{ display: "flex", gap: 6 }}>
                                 <input
-                                  type="password" placeholder="新しいパスワード" value={resetPasswordValue}
+                                  type="password" placeholder={t("settings.users.newPh")} value={resetPasswordValue}
                                   onChange={(e) => setResetPasswordValue(e.target.value)}
                                 />
-                                <button onClick={() => submitPasswordReset(u.username)}>変更</button>
-                                <button onClick={() => { setResetPasswordFor(null); setResetPasswordValue(""); }}>キャンセル</button>
+                                <button onClick={() => submitPasswordReset(u.username)}>{t("settings.users.change")}</button>
+                                <button onClick={() => { setResetPasswordFor(null); setResetPasswordValue(""); }}>{t("common.cancel")}</button>
                               </span>
                             ) : (
-                              <button onClick={() => { setResetPasswordFor(u.username); setResetPasswordValue(""); }}>パスワード変更</button>
+                              <button onClick={() => { setResetPasswordFor(u.username); setResetPasswordValue(""); }}>{t("settings.users.changePwBtn")}</button>
                             )}
                           </span>
                           <span>
-                            <button onClick={() => deleteUserAccount(u.username)} disabled={isSelf} title={isSelf ? "自分自身は削除できません" : ""}>削除</button>
+                            <button onClick={() => deleteUserAccount(u.username)} disabled={isSelf} title={isSelf ? t("settings.users.cannotDeleteSelf") : ""}>{t("common.delete")}</button>
                           </span>
                         </div>
                       );
                     })}
                   </div>
                   <div className="entityForm" style={{ marginTop: 20 }}>
-                    <small>新規ユーザーを追加</small>
+                    <small>{t("settings.users.addTitle")}</small>
                     <input
-                      placeholder="ユーザー名" value={newUser.username}
+                      placeholder={t("settings.users.usernamePh")} value={newUser.username}
                       onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                     />
                     <input
-                      type="password" placeholder="パスワード" value={newUser.password}
+                      type="password" placeholder={t("settings.users.passwordPh")} value={newUser.password}
                       onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                     />
                     <label>
                       <input
                         type="checkbox" checked={newUser.is_admin}
                         onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
-                      /> 管理者権限を付与する
+                      /> {t("settings.users.grantAdmin")}
                     </label>
                     <button onClick={createNewUser} disabled={userBusy || !newUser.username.trim() || !newUser.password}>
-                      {userBusy ? "追加中..." : "＋ ユーザーを追加"}
+                      {userBusy ? t("settings.users.adding") : t("settings.users.addBtn")}
                     </button>
                   </div>
                 </>
@@ -737,16 +747,16 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       {tab === "import" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
           <p style={{ gridColumn: "1/-1" }}>
-            なろう形式のテキストファイル（本編・下書きのどちらでも可）から、この作品「{project.name}」にエピソードを追加インポートします。既存の話数と重複する場合は本文を上書きし、上書き前の内容は改訂履歴に保存されます。
+            {t("settings.import.intro", { name: project.name })}
           </p>
           {(!importJob || importJob.status === "completed" || importJob.status === "error") && (
             <>
               <label>
-                ファイル *
+                {t("import.file")}
                 <input type="file" accept=".txt" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
               </label>
               <div className="entityFormActions">
-                <button onClick={startImport} disabled={importBusy || !importFile}>{importBusy ? "開始中..." : "インポート開始"}</button>
+                <button onClick={startImport} disabled={importBusy || !importFile}>{importBusy ? t("import.starting") : t("import.start")}</button>
               </div>
             </>
           )}
@@ -755,10 +765,10 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               <p><b>{importJob.source_filename}</b></p>
               <div className="progress"><i style={{ width: `${importJob.progress_percent}%` }} /></div>
               <p className="searchSource">
-                {importJob.status === "queued" && "キューに追加しました…"}
-                {importJob.status === "running" && `${importJob.processed_episodes}/${importJob.total_episodes}話 処理中… ${importJob.last_message}`}
+                {importJob.status === "queued" && t("import.queued")}
+                {importJob.status === "running" && t("settings.import.running", { processed: importJob.processed_episodes, total: importJob.total_episodes, message: importJob.last_message })}
                 {importJob.status === "completed" && importJob.last_message}
-                {importJob.status === "error" && `エラー: ${importJob.last_message}`}
+                {importJob.status === "error" && t("import.errorPrefix", { message: importJob.last_message })}
               </p>
             </div>
           )}
@@ -766,32 +776,32 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       )}
       {tab === "backup" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
-          {!backupStatus && <p style={{ gridColumn: "1/-1" }}>読み込み中...</p>}
+          {!backupStatus && <p style={{ gridColumn: "1/-1" }}>{t("common.loading")}</p>}
           {backupStatus && (
             <>
               <p style={{ gridColumn: "1/-1" }}>
-                データベース（PostgreSQL）とQdrantのバックアップです。全プロジェクト共通のサーバー全体の機能で、この作品専用の設定ではありません。
+                {t("settings.backup.intro")}
               </p>
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                自動バックアップ：{backupStatus.enabled ? (
-                  <span className="savedNote">✓ 有効（{Math.round(backupStatus.interval_seconds / 3600)}時間ごと、直近{backupStatus.retention_count}件を保持、保存先: {backupStatus.backup_dir}）</span>
+                {t("settings.backup.auto")}{backupStatus.enabled ? (
+                  <span className="savedNote">{t("settings.backup.enabled", { hours: Math.round(backupStatus.interval_seconds / 3600), count: backupStatus.retention_count, dir: backupStatus.backup_dir })}</span>
                 ) : (
-                  <span>無効（環境変数 <code>BACKUP_ENABLED=true</code> で有効化できます。詳しくは動作要件のドキュメントを参照してください）</span>
+                  <span>{t("settings.backup.disabledPre")}<code>BACKUP_ENABLED=true</code>{t("settings.backup.disabledPost")}</span>
                 )}
               </p>
               <div className="entityFormActions">
-                <button onClick={runBackupNow} disabled={backupBusy}>{backupBusy ? "バックアップ中..." : "今すぐバックアップ"}</button>
+                <button onClick={runBackupNow} disabled={backupBusy}>{backupBusy ? t("settings.backup.running") : t("settings.backup.run")}</button>
               </div>
               {backupResult && (
                 <p style={{ gridColumn: "1/-1" }} className={backupResult.postgres_ok ? "savedNote" : "errorNote"}>
-                  {backupResult.postgres_ok ? "✓" : "✗"} PostgreSQL: {backupResult.postgres_ok ? "成功" : backupResult.postgres_error}
-                  {" / "}Qdrant: {backupResult.qdrant_ok ? "成功" : backupResult.qdrant_error}
-                  （{backupResult.duration_seconds}秒）
+                  {backupResult.postgres_ok ? "✓" : "✗"} PostgreSQL: {backupResult.postgres_ok ? t("settings.backup.ok") : backupResult.postgres_error}
+                  {" / "}Qdrant: {backupResult.qdrant_ok ? t("settings.backup.ok") : backupResult.qdrant_error}
+                  {t("settings.backup.duration", { seconds: backupResult.duration_seconds })}
                 </p>
               )}
               <div style={{ gridColumn: "1/-1" }}>
-                <small>バックアップ履歴（最新{backupStatus.backups.length}件）</small>
-                {backupStatus.backups.length === 0 && <p className="searchSource">まだバックアップがありません。</p>}
+                <small>{t("settings.backup.history", { count: backupStatus.backups.length })}</small>
+                {backupStatus.backups.length === 0 && <p className="searchSource">{t("settings.backup.none")}</p>}
                 {backupStatus.backups.map((b) => (
                   <div className="resultCard" key={b.timestamp}>
                     <b>{b.timestamp}</b>
@@ -802,7 +812,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 ))}
               </div>
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                リストアは`scripts/restore.sh`から行います（確認プロンプトなしで現在のデータを置き換えるため、パスの確認を必ず行ってください）。詳しくは操作マニュアルの「バックアップとリストア」を参照してください。
+                {t("settings.backup.restoreNote")}
               </p>
             </>
           )}
@@ -810,11 +820,11 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       )}
       {tab === "export" && (
         <div className="exportSection">
-          <p>作品全体のエピソードを書き出します。伏線・キャラクター等の設定データは含まれません（本文のみ）。</p>
+          <p>{t("settings.export.intro")}</p>
           <div className="exportButtons">
-            <button onClick={() => exportAs("txt")} disabled={!!exporting}>{exporting === "txt" ? "書き出し中..." : "テキスト (.txt)"}</button>
-            <button onClick={() => exportAs("md")} disabled={!!exporting}>{exporting === "md" ? "書き出し中..." : "Markdown (.md)"}</button>
-            <button onClick={() => exportAs("epub")} disabled={!!exporting}>{exporting === "epub" ? "書き出し中..." : "EPUB (.epub)"}</button>
+            <button onClick={() => exportAs("txt")} disabled={!!exporting}>{exporting === "txt" ? t("settings.export.exporting") : t("settings.export.txt")}</button>
+            <button onClick={() => exportAs("md")} disabled={!!exporting}>{exporting === "md" ? t("settings.export.exporting") : "Markdown (.md)"}</button>
+            <button onClick={() => exportAs("epub")} disabled={!!exporting}>{exporting === "epub" ? t("settings.export.exporting") : "EPUB (.epub)"}</button>
           </div>
         </div>
       )}

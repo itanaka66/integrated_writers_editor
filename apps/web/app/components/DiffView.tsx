@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { diffLines, Change } from "diff";
+import { useT } from "../lib/i18n";
 
 // Line-level diff between two texts. In edit mode, added lines get a
 // checkbox (checked by default) so the caller can accept a merge that's
@@ -20,6 +21,7 @@ export default function DiffView({
   onApply?: (merged: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const parts = useMemo(() => diffLines(before, after), [before, after]);
   const addedIndexes = useMemo(() => parts.map((p, i) => (p.added ? i : -1)).filter((i) => i >= 0), [parts]);
   const [accepted, setAccepted] = useState<Set<number>>(new Set(addedIndexes));
@@ -43,8 +45,8 @@ export default function DiffView({
   return (
     <div className="modalOverlay" onClick={onClose}>
       <div className="modalCard diffCard" onClick={(ev) => ev.stopPropagation()}>
-        <h1>{readOnly ? "差分の比較" : "差分プレビュー"}</h1>
-        {!readOnly && <p className="diffHint">追加された行はチェックを外すと本文に反映されません。</p>}
+        <h1>{readOnly ? t("diff.titleReadOnly") : t("diff.title")}</h1>
+        {!readOnly && <p className="diffHint">{t("diff.hint")}</p>}
         <div className="diffBody">
           {parts.map((p: Change, i) => {
             const cls = p.added ? "diffAdded" : p.removed ? "diffRemoved" : "diffUnchanged";
@@ -54,7 +56,7 @@ export default function DiffView({
                 {!readOnly && p.added && (
                   <label className="diffCheckbox">
                     <input type="checkbox" checked={accepted.has(i)} onChange={() => toggle(i)} />
-                    <span>この変更を適用</span>
+                    <span>{t("diff.applyChange")}</span>
                   </label>
                 )}
                 {lines.map((line, j) => (
@@ -65,8 +67,8 @@ export default function DiffView({
           })}
         </div>
         <div className="modalActions">
-          <button onClick={onClose}>{readOnly ? "閉じる" : "キャンセル"}</button>
-          {!readOnly && <button onClick={apply}>適用</button>}
+          <button onClick={onClose}>{readOnly ? t("common.close") : t("common.cancel")}</button>
+          {!readOnly && <button onClick={apply}>{t("diff.apply")}</button>}
         </div>
       </div>
     </div>
