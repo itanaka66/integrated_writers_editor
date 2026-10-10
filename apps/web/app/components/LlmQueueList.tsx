@@ -1,4 +1,5 @@
 "use client";
+import { useLocale, useT } from "../lib/i18n";
 
 export type LlmJob = {
   id: number; label: string; username: string | null; status: string;
@@ -11,17 +12,19 @@ export type LlmQueueData = { running: LlmJob[]; queued: LlmJob[]; recent: LlmJob
 // running job gets the animated indeterminate bar, a waiting one a static
 // dashed bar, and a finished one a full bar.
 function Row({ job, me }: { job: LlmJob; me: string | null }) {
+  const t = useT();
+  const locale = useLocale();
   const mine = !!me && job.username === me;
   const running = job.status === "running";
   const queued = job.status === "queued";
-  const badge = running ? "処理中" : queued ? `待機中・${job.position}番目`
-    : job.status === "done" ? "完了" : job.status === "cancelled" ? "中断" : "エラー";
+  const badge = running ? t("llm.badgeRunning") : queued ? t("llm.badgeQueued", { position: job.position ?? "" })
+    : job.status === "done" ? t("llm.badgeDone") : job.status === "cancelled" ? t("llm.badgeCancelled") : t("llm.badgeError");
   const kind = running ? "running" : queued ? "queued" : job.status === "done" ? "done" : "failed";
   return (
     <li className={`llmQueueRow ${kind}${mine ? " mine" : ""}`} data-testid="llm-queue-row">
       <div className="llmQueueHead">
         <b>{job.label}</b>
-        <span className="llmQueueUser">{job.username ? (mine ? `${job.username}（自分）` : job.username) : "—"}</span>
+        <span className="llmQueueUser">{job.username ? (mine ? t("llm.mine", { name: job.username }) : job.username) : "—"}</span>
         <span className={`llmQueueBadge ${kind}`}>{badge}</span>
       </div>
       <div
@@ -35,20 +38,21 @@ function Row({ job, me }: { job: LlmJob; me: string | null }) {
         <i />
       </div>
       <div className="llmProgressMeta">
-        <span>{queued ? "待機" : "経過"} {Math.floor(job.elapsed_seconds)} 秒</span>
-        {job.chars > 0 && <span>{job.chars.toLocaleString()} 文字受信</span>}
+        <span>{t(queued ? "llm.queuedFor" : "llm.elapsed", { seconds: Math.floor(job.elapsed_seconds) })}</span>
+        {job.chars > 0 && <span>{t("llm.charsReceived", { count: job.chars.toLocaleString(locale) })}</span>}
       </div>
     </li>
   );
 }
 
 export default function LlmQueueList({ data, me, showEmpty }: { data: LlmQueueData | null; me: string | null; showEmpty?: boolean }) {
+  const t = useT();
   const rows = data ? [...data.running, ...data.queued, ...data.recent] : [];
   if (rows.length === 0) {
-    return showEmpty ? <small>現在、処理中・待機中のAI処理はありません。</small> : null;
+    return showEmpty ? <small>{t("llm.none")}</small> : null;
   }
   return (
-    <ul className="llmQueueList" aria-label="AI処理キュー">
+    <ul className="llmQueueList" aria-label={t("llm.queue")}>
       {rows.map((j) => <Row key={`${j.status}-${j.id}`} job={j} me={me} />)}
     </ul>
   );

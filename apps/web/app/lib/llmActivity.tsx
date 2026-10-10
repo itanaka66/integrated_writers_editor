@@ -3,6 +3,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import LlmProgressView from "../components/LlmProgressView";
 import LlmQueueList, { LlmQueueData } from "../components/LlmQueueList";
 import { api } from "./api";
+import { useT } from "./i18n";
 
 export type LlmActivityHandle = {
   update: (patch: { progress?: number; detail?: string }) => void;
@@ -24,6 +25,7 @@ export function useLlmActivity() {
 export const QUEUE_POLL_MS = 1000;
 
 export function LlmActivityProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [items, setItems] = useState<Activity[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [queue, setQueue] = useState<LlmQueueData | null>(null);
@@ -72,7 +74,7 @@ export function LlmActivityProvider({ children }: { children: ReactNode }) {
       {children}
       {active && (
         <div className="modalOverlay llmProgressOverlay">
-          <div className="modalCard" role="dialog" aria-modal="true" aria-label="AI処理中">
+          <div className="modalCard" role="dialog" aria-modal="true" aria-label={t("llm.dialog")}>
             {current ? (
               <LlmProgressView
                 label={current.label}
@@ -82,12 +84,12 @@ export function LlmActivityProvider({ children }: { children: ReactNode }) {
                 onCancel={current.cancel}
               />
             ) : (
-              <b className="llmProgressLabel">AI処理キュー</b>
+              <b className="llmProgressLabel">{t("llm.queue")}</b>
             )}
-            {items.length > 1 && <small>ほか {items.length - 1} 件の処理が進行中です</small>}
+            {items.length > 1 && <small>{t("llm.others", { count: items.length - 1 })}</small>}
             <LlmQueueList data={queue} me={me} showEmpty={!current} />
             {panelOpen && (
-              <div className="modalActions"><button type="button" onClick={() => setPanelOpen(false)}>閉じる</button></div>
+              <div className="modalActions"><button type="button" onClick={() => setPanelOpen(false)}>{t("common.close")}</button></div>
             )}
           </div>
         </div>
@@ -99,5 +101,6 @@ export function LlmActivityProvider({ children }: { children: ReactNode }) {
 // Sidebar entry: opens the queue panel (polling starts only once opened).
 export function LlmQueueButton() {
   const { openQueue } = useLlmActivity();
-  return <button type="button" className="appSidebarQueue" onClick={openQueue}>📋 AI処理キュー</button>;
+  const t = useT();
+  return <button type="button" className="appSidebarQueue" onClick={openQueue}>{t("llm.queueButton")}</button>;
 }

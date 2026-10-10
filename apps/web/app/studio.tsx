@@ -14,6 +14,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import Resizer from "./components/Resizer";
 import { useResizableWidth } from "./lib/useResizableWidth";
 import { LlmActivityProvider } from "./lib/llmActivity";
+import { I18nProvider } from "./lib/i18n";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -43,9 +44,9 @@ export default function Studio() {
   }, []);
 
   if (resetToken) return <PasswordResetScreen token={resetToken} />;
-  if (authed === null) return <div className="center">確認中...</div>;
+  if (authed === null) return <div className="center">Checking...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
-  return <LlmActivityProvider><Workspace /></LlmActivityProvider>;
+  return <I18nProvider><LlmActivityProvider><Workspace /></LlmActivityProvider></I18nProvider>;
 }
 
 function PasswordResetScreen({ token }: { token: string }) {
@@ -59,7 +60,7 @@ function PasswordResetScreen({ token }: { token: string }) {
     ev.preventDefault();
     setError("");
     if (newPassword !== confirmPassword) {
-      setError("新しいパスワード（確認）が一致しません。");
+      setError("The new passwords do not match.");
       return;
     }
     setBusy(true);
@@ -67,7 +68,7 @@ function PasswordResetScreen({ token }: { token: string }) {
       await post("/auth/password-reset/confirm", { token, new_password: newPassword });
       setDone(true);
     } catch {
-      setError("このリンクは無効か、有効期限が切れています。もう一度パスワード再設定をお試しください。");
+      setError("This link is invalid or has expired. Please request a new password reset.");
     } finally { setBusy(false); }
   }
 
@@ -80,24 +81,24 @@ function PasswordResetScreen({ token }: { token: string }) {
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
         <b>✦ Integrated writers Editor</b>
-        <p>パスワード再設定</p>
+        <p>Reset your password</p>
         {done ? (
           <>
-            <p className="savedNote">パスワードを再設定しました。新しいパスワードでログインしてください。</p>
-            <button type="button" onClick={backToLogin}>ログイン画面へ</button>
+            <p className="savedNote">Your password has been reset. Please sign in with your new password.</p>
+            <button type="button" onClick={backToLogin}>Back to sign in</button>
           </>
         ) : (
           <>
             <input
-              placeholder="新しいパスワード" type="password" value={newPassword} autoFocus
+              placeholder="New password" type="password" value={newPassword} autoFocus
               onChange={(e) => setNewPassword(e.target.value)}
             />
             <input
-              placeholder="新しいパスワード（確認）" type="password" value={confirmPassword}
+              placeholder="Confirm new password" type="password" value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
             {error && <div className="loginError">{error}</div>}
-            <button type="submit" disabled={busy || !newPassword}>{busy ? "再設定中..." : "パスワードを再設定"}</button>
+            <button type="submit" disabled={busy || !newPassword}>{busy ? "Resetting..." : "Reset password"}</button>
           </>
         )}
       </form>

@@ -1,6 +1,11 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, oauthUrl, post, setAuth } from "../lib/api";
+import { LANGUAGES, LanguageCode, isLanguageCode, resolveLanguage, setStoredLanguage } from "../lib/i18n";
+
+// NOTE: every screen shown before login is intentionally English-only (it does
+// NOT use the active-language dictionaries). The language <select> below is the
+// one place a language is chosen; its option labels are the languages' own names.
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -12,6 +17,18 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
+  // "en" for the server render / first paint, then the stored (or browser) choice.
+  const [language, setLanguage] = useState<LanguageCode>("en");
+
+  useEffect(() => { setLanguage(resolveLanguage()); }, []);
+
+  function chooseLanguage(value: string) {
+    if (!isLanguageCode(value)) return;
+    setLanguage(value);
+    // Persist immediately (not only on submit) so the choice survives the
+    // full-page OAuth2 redirect.
+    setStoredLanguage(value);
+  }
 
   useEffect(() => {
     api("/auth/providers")
@@ -29,6 +46,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   async function submit(ev: FormEvent) {
     ev.preventDefault();
     setError(""); setBusy(true);
+    setStoredLanguage(language);
     setAuth(username, password);
     try {
       await api("/projects");
@@ -41,11 +59,11 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       // never the issue. See .env.example's CORS_ORIGINS comment if this
       // keeps happening after double-checking the password.
       if (err instanceof Error && err.message === "unauthorized") {
-        setError("ユーザー名またはパスワードが違います。");
+        setError("Incorrect username or password.");
       } else if (err instanceof ApiError && err.status === 429) {
-        setError("ログイン試行の失敗が続いたため、一時的にアクセスがロックされています。しばらく待ってから再度お試しください。");
+        setError("Access is temporarily locked after repeated failed sign-in attempts. Please wait a while and try again.");
       } else {
-        setError("APIに接続できませんでした。サーバーが起動しているか、.envのCORS_ORIGINSにこのページのアドレスが含まれているかを確認してください。");
+        setError("Could not connect to the API. Check that the server is running and that CORS_ORIGINS in .env includes this page's address.");
       }
     } finally { setBusy(false); }
   }
@@ -58,7 +76,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     } catch {
       // The endpoint always returns 200; a thrown error here means a
       // connection problem, not an invalid email — show a generic note.
-      setForgotMessage("リクエストの送信に失敗しました。しばらくしてから再度お試しください。");
+      setForgotMessage("Failed to send the request. Please try again later.");
     } finally { setForgotBusy(false); }
   }
 
@@ -66,52 +84,58 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
         <b>✦ Integrated writers Editor</b>
-        <p>AIと創る、あなただけの物語</p>
-        <input placeholder="ユーザー名" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
-        <input placeholder="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <p>Your story, created with AI</p>
+        <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
-        <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
+        <label className="loginLanguage" style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+          Language
+          <select value={language} onChange={(e) => chooseLanguage(e.target.value)}>
+            {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+          </select>
+        </label>
+        <button type="submit" disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
         <button
           type="button"
           className="loginForgotLink"
           onClick={() => { setShowForgotPassword((v) => !v); setForgotMessage(""); }}
         >
-          パスワードをお忘れですか？
+          Forgot your password?
         </button>
         {showForgotPassword && (
           <div className="loginForgotForm">
             {!forgotMessage ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <input
-                  placeholder="登録済みのメールアドレス" type="email" value={forgotEmail}
+                  placeholder="Registered email address" type="email" value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitForgotPassword(); } }}
                 />
-                <button type="button" onClick={submitForgotPassword} disabled={forgotBusy || !forgotEmail}>{forgotBusy ? "送信中..." : "再設定メールを送信"}</button>
+                <button type="button" onClick={submitForgotPassword} disabled={forgotBusy || !forgotEmail}>{forgotBusy ? "Sending..." : "Send reset email"}</button>
               </div>
             ) : (
               <p className="savedNote">{forgotMessage}</p>
             )}
           </div>
         )}
-        <div className="loginDivider">または</div>
+        <div className="loginDivider">or</div>
         <button
           type="button"
           className="loginOAuth"
           disabled={!providers.google}
-          title={providers.google ? undefined : "現在は管理者パスワードでのログインのみ対応しています"}
+          title={providers.google ? undefined : "Only administrator password sign-in is currently available"}
           onClick={() => oauthLogin("google")}
         >
-          Googleでログイン
+          Sign in with Google
         </button>
         <button
           type="button"
           className="loginOAuth"
           disabled={!providers.github}
-          title={providers.github ? undefined : "現在は管理者パスワードでのログインのみ対応しています"}
+          title={providers.github ? undefined : "Only administrator password sign-in is currently available"}
           onClick={() => oauthLogin("github")}
         >
-          GitHubでログイン
+          Sign in with GitHub
         </button>
       </form>
     </div>

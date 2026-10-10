@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { streamSSE } from "../lib/api";
 import LlmProgressView from "./LlmProgressView";
+import { useT } from "../lib/i18n";
 
 type Diff = { original: string; suggested: string; reason: string };
 
@@ -24,6 +25,7 @@ export default function ProofreadPanel({
   onApply: (next: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [loading, setLoading] = useState(true);
   const [received, setReceived] = useState(0);
   const startedAt = useRef(Date.now());
@@ -64,7 +66,7 @@ export default function ProofreadPanel({
           // without bothering the user with an error that clears itself
           // a moment later.
           if (attempt === 0) { attempt = 1; start(); return; }
-          setError(gotError || "校正に失敗しました。");
+          setError(gotError || t("proofread.failed"));
           setLoading(false);
         },
         { content: checkedContent.current },
@@ -98,19 +100,19 @@ export default function ProofreadPanel({
   return (
     <div className="modalOverlay" onClick={onClose}>
       <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-        <h1>文章校正</h1>
+        <h1>{t("proofread.title")}</h1>
         {loading && (
           <LlmProgressView
-            label="文章校正をAIが実行中です…（スタイルガイドと照合しています）"
-            detail={received > 0 ? `${received} 件のイベントを受信` : undefined}
+            label={t("proofread.working")}
+            detail={received > 0 ? t("proofread.events", { count: received }) : undefined}
             startedAt={startedAt.current}
           />
         )}
         {error && <p className="errorNote">{error}</p>}
-        {!loading && !error && diffs.length === 0 && <p>スタイルガイドに沿った修正点は見つかりませんでした。</p>}
+        {!loading && !error && diffs.length === 0 && <p>{t("proofread.none")}</p>}
         {!loading && !error && current && (
           <>
-            <p className="searchSource">{index + 1} / {diffs.length}件</p>
+            <p className="searchSource">{t("proofread.progress", { index: index + 1, total: diffs.length })}</p>
             <div className="proofreadDiff">
               <div className="diffChunk diffRemoved"><pre>- {current.original}</pre></div>
               <div className="diffChunk diffAdded"><pre>+ {current.suggested}</pre></div>
@@ -120,11 +122,11 @@ export default function ProofreadPanel({
         )}
         <div className="modalActions">
           {done || diffs.length === 0 || error ? (
-            <button onClick={onClose}>閉じる</button>
+            <button onClick={onClose}>{t("common.close")}</button>
           ) : (
             <>
-              <button onClick={skipCurrent}>スキップで次に進む</button>
-              <button onClick={applyCurrent}>OKで次に進む</button>
+              <button onClick={skipCurrent}>{t("proofread.skip")}</button>
+              <button onClick={applyCurrent}>{t("proofread.ok")}</button>
             </>
           )}
         </div>

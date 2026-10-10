@@ -4,8 +4,10 @@ import { api, ApiError, clearAuth, oauthUrl } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import NewProjectForm from "./NewProjectForm";
 import ImportPanel from "./ImportPanel";
+import { useT } from "../lib/i18n";
 
 export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) {
+  const t = useT();
   const [projects, setProjects] = useState<Project[]>([]);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [showNew, setShowNew] = useState(false);
@@ -31,9 +33,9 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
       setCounts(Object.fromEntries(entries));
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
-        setError("ログイン試行の失敗が続いたため、一時的にアクセスがロックされています。しばらく待ってから再度お試しください。");
+        setError(t("dashboard.errorLocked"));
       } else {
-        setError("プロジェクトの読み込みに失敗しました。APIに接続できないか、CORS_ORIGINSの設定に問題がある可能性があります。");
+        setError(t("dashboard.errorLoad"));
       }
     } finally { setBusy(false); }
   }
@@ -56,25 +58,25 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
   return (
     <div className="dashboard">
       <header className="dashboardHeader">
-        <div><small>DASHBOARD</small><h1>こんにちは、{username || "ユーザー"}さん</h1></div>
+        <div><small>DASHBOARD</small><h1>{t("dashboard.greeting", { name: username || t("dashboard.defaultUser") })}</h1></div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowImport(true)}>ファイルからインポート</button>
-          <button className="add" onClick={() => setShowNew(true)}>＋ 新規プロジェクト作成</button>
-          <button onClick={logout}>ログアウト</button>
+          <button onClick={() => setShowImport(true)}>{t("dashboard.import")}</button>
+          <button className="add" onClick={() => setShowNew(true)}>{t("dashboard.newProject")}</button>
+          <button onClick={logout}>{t("common.logout")}</button>
         </div>
       </header>
       {error && <div className="loginError">{error}</div>}
-      {busy && projects.length === 0 ? <p className="loading">読み込み中...</p> : null}
+      {busy && projects.length === 0 ? <p className="loading">{t("common.loading")}</p> : null}
       <div className="dashboardGrid">
         <div className="dashboardWorks">
-          <small>マイプロジェクト</small>
-          {projects.length === 0 && !busy && <div className="card"><b>まだプロジェクトがありません</b><p>「新規プロジェクト作成」から最初のプロジェクトを作りましょう。</p></div>}
+          <small>{t("dashboard.myProjects")}</small>
+          {projects.length === 0 && !busy && <div className="card"><b>{t("dashboard.noProjects")}</b><p>{t("dashboard.noProjectsHint")}</p></div>}
           {projects.map((p) => {
             const eps = counts[p.id] ?? 0;
             return (
               <div className="workCard" key={p.id} onClick={() => onOpen(p)}>
                 <div className="workCardHead"><b>{p.name}</b></div>
-                <div className="workCardFoot"><span>{eps}記事</span></div>
+                <div className="workCardFoot"><span>{t("dashboard.episodeCount", { count: eps })}</span></div>
               </div>
             );
           })}

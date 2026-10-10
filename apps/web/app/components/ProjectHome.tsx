@@ -3,16 +3,19 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
+import { MessageKey, useLocale, useT } from "../lib/i18n";
 
-const ICONS: { key: Section; label: string }[] = [
-  { key: "write", label: "✎ 執筆" },
-  { key: "materials", label: "🗂 資料" },
-  { key: "search", label: "🔍 検索" },
-  { key: "chat", label: "💬 AIチャット" },
-  { key: "settings", label: "⚙ 設定" },
+const ICONS: { key: Section; label: MessageKey }[] = [
+  { key: "write", label: "nav.write" },
+  { key: "materials", label: "nav.materials" },
+  { key: "search", label: "nav.search" },
+  { key: "chat", label: "nav.chat" },
+  { key: "settings", label: "nav.settings" },
 ];
 
 export default function ProjectHome({ project, onSection }: { project: Project; onSection: (s: Section) => void }) {
+  const t = useT();
+  const locale = useLocale();
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes).catch(() => {}); }, [project.id]);
   const recent = [...episodes].sort((a, b) => b.number - a.number).slice(0, 5);
@@ -22,20 +25,20 @@ export default function ProjectHome({ project, onSection }: { project: Project; 
   return (
     <div className="panel projectHome">
       <div className="projectHomeHead">
-        <div><h1>{project.name}</h1><p>{project.description || "説明未設定"}</p></div>
+        <div><h1>{project.name}</h1><p>{project.description || t("home.noDescription")}</p></div>
       </div>
       <div className="progressStats">
-        <div><small>記事数</small><b>{episodes.length}</b></div>
-        <div><small>合計文字数</small><b>{totalChars.toLocaleString()}</b></div>
-        <div><small>平均文字数</small><b>{avgChars.toLocaleString()}</b></div>
+        <div><small>{t("home.episodeCount")}</small><b>{episodes.length}</b></div>
+        <div><small>{t("home.totalChars")}</small><b>{totalChars.toLocaleString(locale)}</b></div>
+        <div><small>{t("home.avgChars")}</small><b>{avgChars.toLocaleString(locale)}</b></div>
       </div>
       <div className="iconGrid">
-        {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{x.label}</button>)}
+        {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{t(x.label)}</button>)}
       </div>
       <div className="card">
-        <small>最近の更新</small>
-        {recent.length === 0 ? <p>まだ記事がありません。「執筆」から書き始めましょう。</p> :
-          recent.map((e) => <div className="twinRow" key={e.id}><b>{e.title}</b><span>{(e.summary || "").slice(0, 40) || "概要未設定"}</span></div>)}
+        <small>{t("home.recent")}</small>
+        {recent.length === 0 ? <p>{t("home.noEpisodes")}</p> :
+          recent.map((e) => <div className="twinRow" key={e.id}><b>{e.title}</b><span>{(e.summary || "").slice(0, 40) || t("home.noSummary")}</span></div>)}
       </div>
     </div>
   );

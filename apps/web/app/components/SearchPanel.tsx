@@ -2,12 +2,14 @@
 import { useEffect, useState } from "react";
 import { api, post } from "../lib/api";
 import { Project } from "../lib/types";
+import { useT } from "../lib/i18n";
 
 type TextSearchMatch = { episode_id: number; number: number; title: string; count: number; snippets: string[] };
 type MemoSearchMatch = { memo_id: number; category: string; title: string; count: number; snippets: string[] };
 type TextReplaceEpisodeResult = { episode_id: number; number: number; title: string; replaced_count: number };
 
 export default function SearchPanel({ projectId }: { projectId: number }) {
+  const t = useT();
   const [mode, setMode] = useState<"semantic" | "replace">("semantic");
   const [q, setQ] = useState(""), [r, setR] = useState<any[]>([]), [source, setSource] = useState(""), [busy, setBusy] = useState(false);
   const [allProjects, setAllProjects] = useState(false);
@@ -38,7 +40,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
       setR(x.results || []); setSource(x.source || "");
     } finally { setBusy(false); }
   }
-  async function reindex() { const x = await post("/rag/index", { project_id: projectId }); alert(`索引を再構築しました (${x.indexed ?? 0}件)`); }
+  async function reindex() { const x = await post("/rag/index", { project_id: projectId }); alert(t("search.reindexed", { count: x.indexed ?? 0 })); }
 
   async function findAll() {
     if (!findQ) return;
@@ -62,7 +64,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
 
   async function replaceAll() {
     if (!findQ || selected.size === 0) return;
-    if (!confirm(`選択した${selected.size}話で「${findQ}」を「${replaceQ}」に置換します。元に戻したい場合は各話の改訂履歴から復元できます。よろしいですか？`)) return;
+    if (!confirm(t("search.confirmReplace", { count: selected.size, find: findQ, replace: replaceQ }))) return;
     setReplaceBusy(true);
     try {
       const x = await post(`/projects/${projectId}/text-replace`, {
@@ -76,23 +78,23 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
   return (
     <div className="panel">
       <small>SEARCH</small>
-      <h1>検索</h1>
+      <h1>{t("search.title")}</h1>
       <div className="twinTabs">
-        <button className={mode === "semantic" ? "on" : ""} onClick={() => setMode("semantic")}>意味検索</button>
-        <button className={mode === "replace" ? "on" : ""} onClick={() => setMode("replace")}>検索・全置換</button>
+        <button className={mode === "semantic" ? "on" : ""} onClick={() => setMode("semantic")}>{t("search.semanticTab")}</button>
+        <button className={mode === "replace" ? "on" : ""} onClick={() => setMode("replace")}>{t("search.replaceTab")}</button>
       </div>
       {mode === "semantic" && (
         <>
-          <p>本文をベクトル検索（Qdrant）します。接続できない場合はPostgreSQLの全文一致にフォールバックします。</p>
+          <p>{t("search.semanticIntro")}</p>
           <label className="searchAllToggle">
-            <input type="checkbox" checked={allProjects} onChange={(e) => setAllProjects(e.target.checked)} /> すべての作品を検索対象にする
+            <input type="checkbox" checked={allProjects} onChange={(e) => setAllProjects(e.target.checked)} /> {t("search.allProjects")}
           </label>
           <div className="ragbar">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={allProjects ? "全作品の本文を意味検索" : "この作品の本文を意味検索"} onKeyDown={(e) => e.key === "Enter" && search()} />
-            <button onClick={search}>{busy ? "検索中…" : "検索"}</button>
-            {!allProjects && <button onClick={reindex}>再構築</button>}
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={allProjects ? t("search.phAll") : t("search.phOne")} onKeyDown={(e) => e.key === "Enter" && search()} />
+            <button onClick={search}>{busy ? t("search.searching") : t("search.search")}</button>
+            {!allProjects && <button onClick={reindex}>{t("search.reindex")}</button>}
           </div>
-          {source && <p className="searchSource">検索元：{source === "qdrant" ? "セマンティック検索 (Qdrant)" : "全文一致 (PostgreSQL フォールバック)"}</p>}
+          {source && <p className="searchSource">{t("search.source", { source: source === "qdrant" ? t("search.sourceQdrant") : t("search.sourceFallback") })}</p>}
           {r.map((x, i) => (
             <div className="resultCard" key={i}>
               <b>{x.title}</b>
@@ -104,51 +106,51 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
       )}
       {mode === "replace" && (
         <>
-          <p>この作品内の全話本文を対象に、文字列を検索・一括置換します。置換前の内容は改訂履歴に自動保存されます。</p>
+          <p>{t("search.replaceIntro")}</p>
           <div className="ragbar">
-            <input value={findQ} onChange={(e) => setFindQ(e.target.value)} placeholder="検索する文字列" onKeyDown={(e) => e.key === "Enter" && findAll()} />
-            <input value={replaceQ} onChange={(e) => setReplaceQ(e.target.value)} placeholder="置換後の文字列" />
-            <button onClick={findAll} disabled={!findQ}>{findBusy ? "検索中…" : "検索"}</button>
+            <input value={findQ} onChange={(e) => setFindQ(e.target.value)} placeholder={t("search.findPh")} onKeyDown={(e) => e.key === "Enter" && findAll()} />
+            <input value={replaceQ} onChange={(e) => setReplaceQ(e.target.value)} placeholder={t("search.replacePh")} />
+            <button onClick={findAll} disabled={!findQ}>{findBusy ? t("search.searching") : t("search.search")}</button>
           </div>
           <label className="searchAllToggle">
-            <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} /> 大文字・小文字を区別する
+            <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} /> {t("search.caseSensitive")}
           </label>
           {totalMatches > 0 && (
             <>
-              <p className="searchSource">{matches.length}話で合計{totalMatches}件ヒット。置換したい話を選択してください。</p>
+              <p className="searchSource">{t("search.hits", { episodes: matches.length, total: totalMatches })}</p>
               {matches.map((m) => (
                 <div className="resultCard" key={m.episode_id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                     <input type="checkbox" checked={selected.has(m.episode_id)} onChange={() => toggleSelected(m.episode_id)} />
-                    <b>第{m.number}話 {m.title}</b>
-                    <span className="resultProject">{m.count}件</span>
+                    <b>{t("search.episodeLabel", { number: m.number, title: m.title })}</b>
+                    <span className="resultProject">{t("search.count", { count: m.count })}</span>
                   </label>
                   {m.snippets.map((s, i) => <p key={i}>{s}</p>)}
                 </div>
               ))}
               <div className="entityFormActions">
-                <button onClick={replaceAll} disabled={replaceBusy || selected.size === 0}>{replaceBusy ? "置換中…" : `選択した${selected.size}話を置換`}</button>
+                <button onClick={replaceAll} disabled={replaceBusy || selected.size === 0}>{replaceBusy ? t("search.replacing") : t("search.replaceSelected", { count: selected.size })}</button>
               </div>
             </>
           )}
           {totalMemoMatches > 0 && (
             <>
-              <p className="searchSource">メモ{memoMatches.length}件で合計{totalMemoMatches}件ヒット（メモは置換対象外です。「資料」から編集してください）。</p>
+              <p className="searchSource">{t("search.memoHits", { memos: memoMatches.length, total: totalMemoMatches })}</p>
               {memoMatches.map((m) => (
                 <div className="resultCard" key={m.memo_id}>
-                  <b>{m.title || "（無題）"}</b>
-                  <span className="resultProject">{m.category}・{m.count}件</span>
+                  <b>{m.title || t("common.untitled")}</b>
+                  <span className="resultProject">{t("search.memoMeta", { category: m.category, count: m.count })}</span>
                   {m.snippets.map((s, i) => <p key={i}>{s}</p>)}
                 </div>
               ))}
             </>
           )}
           {searched && !findBusy && totalMatches === 0 && totalMemoMatches === 0 && replaceResult === null && (
-            <p className="searchSource">一致する話・メモがありませんでした。</p>
+            <p className="searchSource">{t("search.noMatch")}</p>
           )}
           {replaceResult && (
             <p className="searchSource">
-              {replaceResult.episodes.length}話・合計{replaceResult.total_replaced}件を置換しました。
+              {t("search.replaced", { episodes: replaceResult.episodes.length, total: replaceResult.total_replaced })}
             </p>
           )}
         </>
