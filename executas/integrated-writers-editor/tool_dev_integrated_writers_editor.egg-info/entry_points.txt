@@ -1,0 +1,2 @@
+[console_scripts]
+tool-dev-integrated-writers-editor = integrated_writers_editor_plugin:main

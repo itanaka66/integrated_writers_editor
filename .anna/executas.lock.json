@@ -1,0 +1,11 @@
+{
+  "$schema": "anna-executas-lock/v1",
+  "host": "https://anna.partners",
+  "executas": {
+    "integrated-writers-editor": {
+      "tool_id": "tool-integrated-novel-editor-integrated-writers-editor-bzk8fpc5",
+      "path": "./executas/integrated-writers-editor",
+      "source": "working"
+    }
+  }
+}

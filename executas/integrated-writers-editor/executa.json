@@ -1,0 +1,9 @@
+{
+  "slug": "integrated-writers-editor",
+  "name": "Integrated Writers Editor",
+  "version": "0.1.0",
+  "executa_type": "tool",
+  "tool_id": "tool-dev-integrated-writers-editor",
+  "type": "python",
+  "enabled": true
+}

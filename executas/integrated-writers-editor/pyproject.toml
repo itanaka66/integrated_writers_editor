@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tool-dev-integrated-writers-editor"
+version = "0.1.0"
+description = "Executa for Integrated Writers Editor"
+requires-python = ">=3.10"
+
+[project.scripts]
+tool-dev-integrated-writers-editor = "integrated_writers_editor_plugin:main"
+
+[tool.setuptools]
+py-modules = ["integrated_writers_editor_plugin"]

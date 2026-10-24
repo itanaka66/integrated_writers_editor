@@ -1,0 +1,12 @@
+{
+  "name": "Integrated Writers Editor",
+  "tagline": "AI-powered writing and editing workspace",
+  "description": "An AI-assisted workspace for creating, organizing, editing, and reviewing novels, articles, reports, documentation, and other written content.",
+  "category": "productivity",
+  "slug": "integrated-writers-editor",
+  "bundled_executas": {
+    "integrated-writers-editor": {
+      "path": "./executas/integrated-writers-editor"
+    }
+  }
+}

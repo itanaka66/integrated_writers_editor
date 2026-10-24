@@ -1,0 +1,9 @@
+{
+  "$schema": "anna-executa-identity/v1",
+  "host": "https://anna.partners",
+  "executa_id": 1256,
+  "tool_id": "tool-integrated-novel-editor-integrated-writers-editor-bzk8fpc5",
+  "slug": "integrated-writers-editor",
+  "executa_type": "tool",
+  "first_published_at": "2026-10-24T10:37:49.891Z"
+}
