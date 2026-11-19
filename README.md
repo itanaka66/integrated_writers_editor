@@ -2,7 +2,11 @@
 
 日本語版はこちら → [README.ja.md](README.ja.md)
 
-An AI-assisted article/writing editor. Runs entirely on your own machine/server; the AI backend is your choice — a local [Ollama](https://ollama.com) LLM (no data leaves your machine) or a cloud provider (Claude / ChatGPT / Gemini) via your own API key, switchable anytime from 設定 > 接続設定.
+Integrated Writers Editor (IWE) is a self-hosted, AI-assisted writing and article-production platform. It combines a structured writing environment with AI-powered content generation, project and episode management, revision history, reference materials, semantic search, and multiple AI model providers.
+
+The project is designed to run on a user's own computer or server. Writers can use a local LLM through Ollama to keep their writing data and AI processing on their own infrastructure, or connect to cloud-based models such as Anthropic Claude, OpenAI ChatGPT, and Google Gemini.
+
+Its central goal is to provide an integrated workspace in which writers can organize projects, develop ideas, draft and revise content, research topics, and manage the entire writing process.
 
 ## Software & Hardware Requirements
 
